@@ -39,16 +39,7 @@ export function Footer() {
 
           {/* Links Section */}
           <div className='flex flex-col md:mx-4 md:flex-row gap-4 md:gap-12 items-start md:items-start'>
-            {/* Product Column */}
-            <div className='flex flex-col gap-1 md:gap-4'>
-              <h4 className='uppercase font-semibold text-sm text-gray-500'>Product</h4>
-              <div className="flex flex-wrap md:flex-col gap-2 text-sm text-gray-700 items-start">
-                <Link className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors' to="/features">Features</Link>
-                <Link className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors' to="/pricing">Pricing</Link>
-                <Link className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors' to="/dashboard">Dashboard</Link>
-                <Link className='text-gray-600 hover:text-primary-600 whitespace-nowrap font-medium transition-colors' to="/create-event">Create Event</Link>
-              </div>
-            </div>
+
 
             {/* Resources Column */}
             <div className='flex flex-col gap-1 md:gap-4'>
