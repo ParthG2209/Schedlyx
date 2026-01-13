@@ -1,6 +1,6 @@
 -- supabase/migrations/20240101000000_initial_schema.sql
 -- Schedlyx Database Schema - Initial Migration
--- This creates the foundation for the scheduling platform
+-- FIXED: Removed UNIQUE constraint from profiles.email (Supabase Auth handles this)
 
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -10,9 +10,10 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 -- PROFILES TABLE
 -- =====================================================
 -- Extended user profile data (complements auth.users)
+-- FIXED: email is NOT UNIQUE - Supabase Auth manages uniqueness in auth.users
 CREATE TABLE public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  email TEXT NOT NULL UNIQUE,
+  email TEXT NOT NULL, -- FIXED: Removed UNIQUE constraint
   first_name TEXT NOT NULL DEFAULT '',
   last_name TEXT NOT NULL DEFAULT '',
   avatar_url TEXT,
@@ -35,7 +36,7 @@ CREATE TABLE public.profiles (
 -- =====================================================
 -- Core events table for all scheduling types
 CREATE TABLE public.events (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   
   -- Basic Information
@@ -100,7 +101,7 @@ CREATE TABLE public.events (
 -- =====================================================
 -- Specific time slots/sessions for events
 CREATE TABLE public.event_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   
   -- Session Details
@@ -140,7 +141,7 @@ CREATE TABLE public.event_sessions (
 -- =====================================================
 -- Individual bookings for events or sessions
 CREATE TABLE public.bookings (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
   -- References
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
@@ -198,7 +199,7 @@ CREATE TABLE public.bookings (
 -- =====================================================
 -- Waitlist for fully booked events
 CREATE TABLE public.waitlist (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   session_id UUID REFERENCES public.event_sessions(id) ON DELETE CASCADE,
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -229,7 +230,7 @@ CREATE TABLE public.waitlist (
 -- =====================================================
 -- Override default availability for specific dates
 CREATE TABLE public.availability_overrides (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   
   -- Date Range
@@ -261,7 +262,7 @@ CREATE TABLE public.availability_overrides (
 -- =====================================================
 -- External calendar connections
 CREATE TABLE public.calendar_integrations (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   
   -- Provider Details
@@ -297,7 +298,7 @@ CREATE TABLE public.calendar_integrations (
 -- =====================================================
 -- System notifications and alerts
 CREATE TABLE public.notifications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   
   -- Notification Details
@@ -336,7 +337,7 @@ CREATE TABLE public.notifications (
 -- =====================================================
 -- Track event performance metrics
 CREATE TABLE public.event_analytics (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   event_id UUID NOT NULL REFERENCES public.events(id) ON DELETE CASCADE,
   
   -- Date
@@ -367,7 +368,7 @@ CREATE TABLE public.event_analytics (
 -- =====================================================
 -- Track important changes for compliance and debugging
 CREATE TABLE public.audit_log (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   
   -- Actor
   user_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
@@ -598,3 +599,5 @@ COMMENT ON TABLE public.calendar_integrations IS 'External calendar connections'
 COMMENT ON TABLE public.notifications IS 'User notifications and alerts';
 COMMENT ON TABLE public.event_analytics IS 'Event performance metrics';
 COMMENT ON TABLE public.audit_log IS 'Audit trail for compliance';
+
+COMMENT ON COLUMN public.profiles.email IS 'Email synced from auth.users - not unique here as auth handles uniqueness';
