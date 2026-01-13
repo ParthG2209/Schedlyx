@@ -1,10 +1,10 @@
 -- supabase/migrations/20240101000001_row_level_security.sql
 -- Row Level Security (RLS) Policies for Schedlyx
--- Implements secure data access controls
+-- FIXED: Added guest user policies for bookings (email-based access)
 
-
+-- =====================================================
 -- ENABLE RLS ON ALL TABLES
-
+-- =====================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_sessions ENABLE ROW LEVEL SECURITY;
@@ -16,9 +16,9 @@ ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.event_analytics ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_log ENABLE ROW LEVEL SECURITY;
 
-
+-- =====================================================
 -- PROFILES POLICIES
-
+-- =====================================================
 
 -- Users can view their own profile
 CREATE POLICY "Users can view own profile"
@@ -35,9 +35,9 @@ CREATE POLICY "Anyone can view public profiles"
   ON public.profiles FOR SELECT
   USING (is_active = true);
 
-
+-- =====================================================
 -- EVENTS POLICIES
-
+-- =====================================================
 
 -- Users can view their own events
 CREATE POLICY "Users can view own events"
@@ -75,9 +75,9 @@ CREATE POLICY "Users can delete own events"
   ON public.events FOR DELETE
   USING (auth.uid() = user_id);
 
-
+-- =====================================================
 -- EVENT SESSIONS POLICIES
-
+-- =====================================================
 
 -- Users can view sessions of their own events
 CREATE POLICY "Users can view own event sessions"
@@ -135,11 +135,12 @@ CREATE POLICY "Users can delete own event sessions"
     )
   );
 
-
+-- =====================================================
 -- BOOKINGS POLICIES
+-- FIXED: Added guest user policies for email-based access
+-- =====================================================
 
-
--- Users can view bookings for their own events
+-- Event owners can view all bookings for their events
 CREATE POLICY "Event owners can view all bookings"
   ON public.bookings FOR SELECT
   USING (
@@ -150,12 +151,21 @@ CREATE POLICY "Event owners can view all bookings"
     )
   );
 
--- Users can view their own bookings
+-- Authenticated users can view their own bookings (user_id match)
 CREATE POLICY "Users can view own bookings"
   ON public.bookings FOR SELECT
   USING (auth.uid() = user_id);
 
--- Anyone can create bookings (for public events)
+-- FIXED: Guests can view their own bookings using email
+-- This allows non-authenticated users to view bookings they created
+CREATE POLICY "Guests can view own booking by email"
+  ON public.bookings FOR SELECT
+  USING (
+    user_id IS NULL 
+    AND email = current_setting('request.jwt.claim.email', true)
+  );
+
+-- Anyone can create bookings for public events (authenticated or guest)
 CREATE POLICY "Anyone can create bookings for public events"
   ON public.bookings FOR INSERT
   WITH CHECK (
@@ -167,10 +177,20 @@ CREATE POLICY "Anyone can create bookings for public events"
     )
   );
 
--- Users can update their own bookings
+-- Authenticated users can update their own bookings
 CREATE POLICY "Users can update own bookings"
   ON public.bookings FOR UPDATE
   USING (auth.uid() = user_id);
+
+-- FIXED: Guests can cancel their own bookings using email
+-- This allows non-authenticated users to cancel bookings they created
+CREATE POLICY "Guests can cancel own booking"
+  ON public.bookings FOR UPDATE
+  USING (
+    user_id IS NULL 
+    AND email = current_setting('request.jwt.claim.email', true)
+  )
+  WITH CHECK (status = 'cancelled');
 
 -- Event owners can update bookings for their events
 CREATE POLICY "Event owners can update bookings"
@@ -183,20 +203,9 @@ CREATE POLICY "Event owners can update bookings"
     )
   );
 
--- Users can cancel their own bookings
-CREATE POLICY "Users can cancel own bookings"
-  ON public.bookings FOR UPDATE
-  USING (
-    auth.uid() = user_id
-    AND status IN ('pending', 'confirmed')
-  )
-  WITH CHECK (
-    status = 'cancelled'
-  );
-
-
+-- =====================================================
 -- WAITLIST POLICIES
-
+-- =====================================================
 
 -- Event owners can view waitlist for their events
 CREATE POLICY "Event owners can view waitlist"
@@ -237,9 +246,9 @@ CREATE POLICY "Event owners can manage waitlist"
     )
   );
 
-
+-- =====================================================
 -- AVAILABILITY OVERRIDES POLICIES
-
+-- =====================================================
 
 -- Users can view their own availability overrides
 CREATE POLICY "Users can view own availability overrides"
@@ -261,9 +270,9 @@ CREATE POLICY "Users can delete own availability overrides"
   ON public.availability_overrides FOR DELETE
   USING (auth.uid() = user_id);
 
-
+-- =====================================================
 -- CALENDAR INTEGRATIONS POLICIES
-
+-- =====================================================
 
 -- Users can view their own calendar integrations
 CREATE POLICY "Users can view own calendar integrations"
@@ -285,9 +294,9 @@ CREATE POLICY "Users can delete own calendar integrations"
   ON public.calendar_integrations FOR DELETE
   USING (auth.uid() = user_id);
 
-
+-- =====================================================
 -- NOTIFICATIONS POLICIES
-
+-- =====================================================
 
 -- Users can view their own notifications
 CREATE POLICY "Users can view own notifications"
@@ -303,9 +312,9 @@ CREATE POLICY "Users can update own notifications"
 -- System can create notifications (via service role)
 -- No policy needed - handled by service role
 
-
+-- =====================================================
 -- EVENT ANALYTICS POLICIES
-
+-- =====================================================
 
 -- Event owners can view analytics for their events
 CREATE POLICY "Event owners can view analytics"
@@ -321,9 +330,9 @@ CREATE POLICY "Event owners can view analytics"
 -- System can create/update analytics (via service role)
 -- No policy needed - handled by service role
 
-
+-- =====================================================
 -- AUDIT LOG POLICIES
-
+-- =====================================================
 
 -- Users can view their own audit logs
 CREATE POLICY "Users can view own audit logs"
@@ -333,9 +342,9 @@ CREATE POLICY "Users can view own audit logs"
 -- System can create audit logs (via service role)
 -- No policy needed - handled by service role
 
-
+-- =====================================================
 -- HELPER FUNCTIONS FOR RLS
-
+-- =====================================================
 
 -- Check if user is event owner
 CREATE OR REPLACE FUNCTION public.is_event_owner(event_uuid UUID)
@@ -400,9 +409,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-
+-- =====================================================
 -- GRANT PERMISSIONS
-
+-- =====================================================
 
 -- Grant usage on schema
 GRANT USAGE ON SCHEMA public TO anon, authenticated;
