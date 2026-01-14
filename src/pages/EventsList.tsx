@@ -9,11 +9,11 @@ export function EventsList() {
   const [filterType, setFilterType] = useState<string>('all')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
 
-  // Mock data - replace with real data from Supabase
+  // FIXED: Mock data with proper UUIDs - replace with real data from Supabase
   const events: Event[] = [
     {
-      id: '1',
-      userId: 'user1',
+      id: 'd4e5f6a7-b8c9-4012-d4e5-f6a7b8c90123',
+      userId: 'user-uuid-1',
       title: 'Product Strategy Workshop',
       description: 'Join us for an interactive workshop where we\'ll dive deep into product strategy, roadmap planning, and user research methodologies.',
       type: 'workshop',
@@ -32,8 +32,8 @@ export function EventsList() {
       updatedAt: '2024-01-01T00:00:00Z'
     },
     {
-      id: '2',
-      userId: 'user1',
+      id: 'e5f6a7b8-c9d0-4123-e5f6-a7b8c9d01234',
+      userId: 'user-uuid-1',
       title: 'React Advanced Patterns',
       description: 'Deep dive into advanced React patterns including hooks, context, and performance optimization.',
       type: 'webinar',
@@ -52,8 +52,8 @@ export function EventsList() {
       updatedAt: '2024-01-02T00:00:00Z'
     },
     {
-      id: '3',
-      userId: 'user1',
+      id: 'f6a7b8c9-d0e1-4234-f6a7-b8c9d0e12345',
+      userId: 'user-uuid-1',
       title: 'Team Standup Meeting',
       description: 'Daily team synchronization and progress updates.',
       type: 'meeting',
@@ -72,8 +72,8 @@ export function EventsList() {
       updatedAt: '2024-01-03T00:00:00Z'
     },
     {
-      id: '4',
-      userId: 'user1',
+      id: 'a7b8c9d0-e1f2-4345-a7b8-c9d0e1f23456',
+      userId: 'user-uuid-1',
       title: 'Career Consultation',
       description: 'One-on-one career guidance and mentorship session.',
       type: 'consultation',
@@ -92,8 +92,8 @@ export function EventsList() {
       updatedAt: '2024-01-04T00:00:00Z'
     },
     {
-      id: '5',
-      userId: 'user1',
+      id: 'b8c9d0e1-f2a3-4456-b8c9-d0e1f2a34567',
+      userId: 'user-uuid-1',
       title: 'Tech Conference 2024',
       description: 'Annual technology conference featuring industry leaders and innovators.',
       type: 'conference',
@@ -112,8 +112,8 @@ export function EventsList() {
       updatedAt: '2024-01-05T00:00:00Z'
     },
     {
-      id: '6',
-      userId: 'user1',
+      id: 'c9d0e1f2-a3b4-4567-c9d0-e1f2a3b45678',
+      userId: 'user-uuid-1',
       title: 'Frontend Developer Interview',
       description: 'Technical interview for frontend developer position.',
       type: 'interview',

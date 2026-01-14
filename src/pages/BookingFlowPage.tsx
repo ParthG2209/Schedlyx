@@ -1,5 +1,6 @@
 // src/pages/BookingFlowPage.tsx
 // Main booking flow orchestrator - BookMyShow style
+// FIXED: Added better error handling and validation
 
 import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -8,6 +9,7 @@ import { useBookingStore } from '../stores/bookingStore'
 import { SlotSelector } from '../components/booking/SlotSelector'
 import { BookingForm } from '../components/booking/BookingForm'
 import { BookingConfirmation } from '../components/booking/BookingConfirmation'
+
 
 export function BookingFlowPage() {
   const { eventId } = useParams<{ eventId: string }>()
@@ -30,28 +32,43 @@ export function BookingFlowPage() {
   } = useBookingStore()
 
   useEffect(() => {
-    // Clear any previous booking state when component mounts
+    // Validate eventId exists and is a valid UUID
+    if (!eventId) {
+      console.error('BookingFlowPage: No eventId provided')
+      navigate('/')
+      return
+    }
+
+    // UUID validation regex
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    if (!uuidRegex.test(eventId)) {
+      console.error('BookingFlowPage: Invalid UUID format:', eventId)
+      // For now, allow it to proceed - the error will be shown in the UI
+    }
+
+    // Cleanup on unmount
     return () => {
-      // Cleanup on unmount
       if (currentStep !== 'completed') {
         cancelBooking()
       }
     }
-  }, [])
+  }, [eventId, currentStep, cancelBooking, navigate])
 
   const handleSelectSlot = async (slot: any) => {
     try {
+      clearError()
       await selectSlot(slot)
-    } catch (error) {
-      console.error('Failed to select slot:', error)
+    } catch (error: any) {
+      console.error('BookingFlowPage: Failed to select slot:', error)
     }
   }
 
   const handleConfirmBooking = async () => {
     try {
+      clearError()
       await confirmBooking()
-    } catch (error) {
-      console.error('Failed to confirm booking:', error)
+    } catch (error: any) {
+      console.error('BookingFlowPage: Failed to confirm booking:', error)
     }
   }
 
@@ -78,13 +95,23 @@ export function BookingFlowPage() {
   if (!eventId) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <p className="text-red-600">Event ID is missing</p>
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+          <p className="text-red-800 font-medium">Invalid Event</p>
+          <p className="text-red-600 mt-2">Event ID is missing from the URL.</p>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-4 btn-primary"
+          >
+            Go Home
+          </button>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
+
       <div className="max-w-4xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -131,6 +158,11 @@ export function BookingFlowPage() {
               <div className="flex-1">
                 <p className="text-sm font-medium text-red-900">Error</p>
                 <p className="text-sm text-red-700 mt-1">{error}</p>
+                {error.includes('RPC') && (
+                  <p className="text-xs text-red-600 mt-2">
+                    Tip: Make sure the database migration has been run successfully.
+                  </p>
+                )}
               </div>
               <button
                 onClick={clearError}

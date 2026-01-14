@@ -11,8 +11,9 @@ import { AuthCallback } from './pages/AuthCallback'
 import { Dashboard } from './pages/Dashboard'
 import { CreateEvent } from './pages/CreateEvent'
 import { PublicEventPage } from './pages/PublicEventPage'
-import { BookingPage } from './pages/BookingPage'
+import { BookingFlowPage } from './pages/BookingFlowPage'
 import { AdminEventManager } from './pages/AdminEventManager'
+import { AdminSlotManagement } from './pages/AdminSlotManagement'
 import { EventsList } from './pages/EventsList'
 
 function App() {
@@ -25,7 +26,7 @@ function App() {
         <Route path="/signup" element={<Signup />} />
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/event/:eventId" element={<PublicEventPage />} />
-        <Route path="/book/:eventId" element={<BookingPage />} />
+        <Route path="/book/:eventId" element={<BookingFlowPage />} />
         <Route path="/events" element={<EventsList />} />
         
         {/* Email Verification Route - needs guard to prevent direct access */}
@@ -60,6 +61,14 @@ function App() {
           element={
             <ProtectedRoute>
               <AdminEventManager />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin/events/:eventId/slots" 
+          element={
+            <ProtectedRoute>
+              <AdminSlotManagement />
             </ProtectedRoute>
           } 
         />

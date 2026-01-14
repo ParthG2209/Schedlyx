@@ -1,177 +1,205 @@
 // src/stores/bookingStore.ts
-// Zustand store for booking state management
+// Zustand store for managing booking flow state
 
 import { create } from 'zustand'
-import { BookingState, SlotAvailability, BookingFormData } from '../types/booking'
 import { BookingService } from '../lib/services/bookingService'
 
+// Local type definitions for the booking store
+interface SlotAvailability {
+  slotId: string
+  startTime: string
+  endTime: string
+  totalCapacity: number
+  availableCount: number
+  price: number
+}
+
+interface BookingFormData {
+  firstName: string
+  lastName: string
+  email: string
+  phone?: string
+  notes?: string
+}
+
+interface ConfirmedBooking {
+  id: string
+  bookingReference: string
+  eventId: string
+  slotId: string
+  firstName: string
+  lastName: string
+  email: string
+  phone: string | null
+  date: string
+  time: string
+  status: string
+  confirmedAt: string
+  createdAt: string
+}
+
+type BookingStep = 'select-slot' | 'fill-details' | 'completed'
+
+interface BookingState {
+  currentStep: BookingStep
+  selectedSlot: SlotAvailability | null
+  lockId: string | null
+  lockExpiresAt: string | null
+  formData: BookingFormData
+  booking: ConfirmedBooking | null
+  error: string | null
+  loading: boolean
+  timeRemaining: number
+}
+
 interface BookingStore extends BookingState {
-  // Actions
   selectSlot: (slot: SlotAvailability) => Promise<void>
   updateFormData: (data: Partial<BookingFormData>) => void
   confirmBooking: () => Promise<void>
-  cancelBooking: () => Promise<void>
+  cancelBooking: () => void
   resetBooking: () => void
-  setError: (error: string | null) => void
   clearError: () => void
-  // Timer
-  timeRemaining: number
-  startTimer: () => void
-  stopTimer: () => void
 }
 
-const initialState: BookingState = {
+const initialFormData: BookingFormData = {
+  firstName: '',
+  lastName: '',
+  email: '',
+  phone: '',
+  notes: ''
+}
+
+export const useBookingStore = create<BookingStore>((set, get) => ({
+  // Initial state
   currentStep: 'select-slot',
   selectedSlot: null,
   lockId: null,
   lockExpiresAt: null,
-  formData: {
-    firstName: '',
-    lastName: '',
-    email: '',
-    phone: '',
-    notes: ''
-  },
+  formData: initialFormData,
   booking: null,
   error: null,
-  loading: false
-}
+  loading: false,
+  timeRemaining: 0,
 
-export const useBookingStore = create<BookingStore>((set, get) => {
-  let timerInterval: NodeJS.Timeout | null = null
-
-  return {
-    ...initialState,
-    timeRemaining: 0,
-
-    selectSlot: async (slot: SlotAvailability) => {
-      set({ loading: true, error: null })
+  // Actions
+  selectSlot: async (slot: SlotAvailability) => {
+    set({ loading: true, error: null })
+    
+    try {
+      // Create a lock for this slot
+      const lockId = await BookingService.createSlotLock(slot.slotId, 1)
       
-      try {
-        // Release any existing lock
-        const currentLockId = get().lockId
-        if (currentLockId) {
-          await BookingService.releaseSlotLock(currentLockId)
-        }
-
-        // Create new lock
-        const lockId = await BookingService.createSlotLock(slot.slotId, 1)
-        
-        // Calculate expiry (10 minutes from now)
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-        
-        set({
-          selectedSlot: slot,
-          lockId,
-          lockExpiresAt: expiresAt,
-          currentStep: 'fill-details',
-          loading: false
-        })
-
-        // Start countdown timer
-        get().startTimer()
-      } catch (error: any) {
-        set({ 
-          error: error.message || 'Failed to reserve slot', 
-          loading: false 
-        })
-        throw error
-      }
-    },
-
-    updateFormData: (data: Partial<BookingFormData>) => {
-      set(state => ({
-        formData: { ...state.formData, ...data }
-      }))
-    },
-
-    confirmBooking: async () => {
-      const { lockId, formData } = get()
+      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
       
-      if (!lockId) {
-        throw new Error('No active slot reservation')
-      }
-
-      set({ loading: true, error: null })
-
-      try {
-        // Complete the booking
-        const booking = await BookingService.completeBooking(lockId, formData)
-        
-        // Stop timer
-        get().stopTimer()
-        
-        set({
-          booking,
-          currentStep: 'completed',
-          loading: false,
-          lockId: null,
-          lockExpiresAt: null
-        })
-      } catch (error: any) {
-        set({ 
-          error: error.message || 'Failed to complete booking', 
-          loading: false 
-        })
-        throw error
-      }
-    },
-
-    cancelBooking: async () => {
-      const { lockId } = get()
+      set({
+        selectedSlot: slot,
+        lockId,
+        lockExpiresAt: expiresAt,
+        currentStep: 'fill-details',
+        loading: false,
+        error: null
+      })
       
-      if (lockId) {
-        try {
-          await BookingService.releaseSlotLock(lockId)
-        } catch (error) {
-          console.error('Failed to release lock:', error)
-        }
-      }
-
-      get().stopTimer()
-      set(initialState)
-    },
-
-    resetBooking: () => {
-      get().stopTimer()
-      set(initialState)
-    },
-
-    setError: (error: string | null) => {
-      set({ error })
-    },
-
-    clearError: () => {
-      set({ error: null })
-    },
-
-    startTimer: () => {
-      const { lockExpiresAt } = get()
-      if (!lockExpiresAt) return
-
-      // Clear any existing timer
-      get().stopTimer()
-
-      // Update timer every second
-      timerInterval = setInterval(() => {
-        const remaining = BookingService.getTimeRemaining(lockExpiresAt)
-        
-        if (remaining <= 0) {
-          // Time expired - reset booking
-          get().setError('Your reservation has expired')
-          get().resetBooking()
-        } else {
-          set({ timeRemaining: remaining })
+      // Start countdown timer
+      const intervalId = setInterval(() => {
+        const state = get()
+        if (state.lockExpiresAt) {
+          const remaining = BookingService.getTimeRemaining(state.lockExpiresAt)
+          
+          if (remaining <= 0) {
+            clearInterval(intervalId)
+            set({
+              error: 'Your reservation has expired. Please select a new slot.',
+              currentStep: 'select-slot',
+              selectedSlot: null,
+              lockId: null,
+              lockExpiresAt: null,
+              timeRemaining: 0
+            })
+          } else {
+            set({ timeRemaining: remaining })
+          }
         }
       }, 1000)
-    },
-
-    stopTimer: () => {
-      if (timerInterval) {
-        clearInterval(timerInterval)
-        timerInterval = null
-      }
-      set({ timeRemaining: 0 })
+      
+    } catch (error: any) {
+      console.error('Error selecting slot:', error)
+      set({
+        loading: false,
+        error: error.message || 'Failed to reserve slot. Please try again.'
+      })
     }
+  },
+
+  updateFormData: (data: Partial<BookingFormData>) => {
+    set(state => ({
+      formData: { ...state.formData, ...data }
+    }))
+  },
+
+  confirmBooking: async () => {
+    const { lockId, formData } = get()
+    
+    if (!lockId) {
+      set({ error: 'No active reservation found' })
+      return
+    }
+    
+    set({ loading: true, error: null })
+    
+    try {
+      const booking = await BookingService.completeBooking(lockId, formData)
+      
+      set({
+        booking,
+        currentStep: 'completed',
+        loading: false,
+        error: null
+      })
+    } catch (error: any) {
+      console.error('Error confirming booking:', error)
+      set({
+        loading: false,
+        error: error.message || 'Failed to confirm booking. Please try again.'
+      })
+    }
+  },
+
+  cancelBooking: () => {
+    const { lockId } = get()
+    
+    if (lockId) {
+      // Release the lock (fire and forget)
+      BookingService.releaseSlotLock(lockId).catch(err => {
+        console.error('Error releasing lock:', err)
+      })
+    }
+    
+    set({
+      currentStep: 'select-slot',
+      selectedSlot: null,
+      lockId: null,
+      lockExpiresAt: null,
+      timeRemaining: 0,
+      error: null
+    })
+  },
+
+  resetBooking: () => {
+    set({
+      currentStep: 'select-slot',
+      selectedSlot: null,
+      lockId: null,
+      lockExpiresAt: null,
+      formData: initialFormData,
+      booking: null,
+      error: null,
+      loading: false,
+      timeRemaining: 0
+    })
+  },
+
+  clearError: () => {
+    set({ error: null })
   }
-})
+}))

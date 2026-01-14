@@ -9,7 +9,8 @@ import {
 export function PublicEventPage() {
   const { eventId } = useParams()
   
-  // Mock data - replace with real data from Supabase
+  // TODO: Fetch real event data from Supabase using eventId
+  // For now, using mock data
   const event = {
     id: eventId,
     title: 'Product Strategy Workshop',
@@ -74,7 +75,7 @@ export function PublicEventPage() {
                 {event.currentAttendees}/{event.maxAttendees} registered
               </div>
               <Link 
-                to={`/book/${event.id}`}
+                to={`/book/${eventId}`}
                 className="bg-white text-primary-600 font-semibold px-6 py-3 rounded-lg hover:bg-gray-100 transition-colors inline-block"
               >
                 Register Now
@@ -137,7 +138,7 @@ export function PublicEventPage() {
                 </div>
               </div>
               <Link 
-                to={`/book/${event.id}`}
+                to={`/book/${eventId}`}
                 className="btn-primary"
               >
                 Register Now

@@ -14,9 +14,10 @@ export function AdminEventManager() {
   const [searchTerm, setSearchTerm] = useState('')
 
   // Mock data - replace with real data from Supabase
+  // FIXED: IDs are now valid UUIDs
   const events = [
     {
-      id: 1,
+      id: 'e12d3a45-67b8-90c1-d2e3-f4a567890abc',
       title: 'Team Standup',
       type: 'meeting',
       status: 'active',
@@ -26,7 +27,7 @@ export function AdminEventManager() {
       createdAt: '2024-01-10'
     },
     {
-      id: 2,
+      id: 'a23b4c56-78d9-01e2-f3a4-b5c678901def',
       title: 'Product Demo',
       type: 'presentation',
       status: 'active',
@@ -36,7 +37,7 @@ export function AdminEventManager() {
       createdAt: '2024-01-12'
     },
     {
-      id: 3,
+      id: 'b34c5d67-89e0-12f3-a4b5-c6d789012345',
       title: 'Workshop: React Basics',
       type: 'workshop',
       status: 'draft',
@@ -46,7 +47,7 @@ export function AdminEventManager() {
       createdAt: '2024-01-14'
     },
     {
-      id: 4,
+      id: 'c45d6e78-90f1-23a4-b5c6-d7e890123456',
       title: 'Client Consultation',
       type: 'consultation',
       status: 'past',
@@ -76,7 +77,7 @@ export function AdminEventManager() {
     }
   }
 
-  const handleDelete = (eventId: number) => {
+  const handleDelete = (eventId: string) => {
     if (confirm('Are you sure you want to delete this event?')) {
       // TODO: Implement delete logic with Supabase
       console.log('Deleting event:', eventId)

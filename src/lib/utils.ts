@@ -1,148 +1,84 @@
-import { type ClassValue, clsx } from 'clsx'
+// src/lib/utils.ts
+// Utility functions for the application
 
 /**
- * Utility function to merge class names
+ * Generate a v4 UUID
  */
-export function cn(...inputs: ClassValue[]) {
-  return clsx(inputs)
-}
-
-/**
- * Format date to readable string
- */
-export function formatDate(date: string | Date, options?: Intl.DateTimeFormatOptions) {
-  const defaultOptions: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  }
-  
-  return new Date(date).toLocaleDateString('en-US', { ...defaultOptions, ...options })
-}
-
-/**
- * Format time to readable string
- */
-export function formatTime(time: string) {
-  return new Date(`2000-01-01T${time}`).toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    hour12: true
+export function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0
+    const v = c === 'x' ? r : (r & 0x3 | 0x8)
+    return v.toString(16)
   })
 }
 
 /**
- * Calculate duration between two times
+ * Validate if a string is a valid UUID
  */
-export function calculateDuration(startTime: string, endTime: string): number {
-  const start = new Date(`2000-01-01T${startTime}`)
-  const end = new Date(`2000-01-01T${endTime}`)
-  return (end.getTime() - start.getTime()) / (1000 * 60) // Return minutes
+export function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  return uuidRegex.test(uuid)
 }
 
 /**
- * Generate time slots for a given duration
+ * Format date for display
  */
-export function generateTimeSlots(
-  startTime: string,
-  endTime: string,
-  duration: number,
-  bufferTime: number = 0
-): string[] {
-  const slots: string[] = []
-  const start = new Date(`2000-01-01T${startTime}`)
-  const end = new Date(`2000-01-01T${endTime}`)
-  const slotDuration = (duration + bufferTime) * 60 * 1000 // Convert to milliseconds
-
-  let current = new Date(start)
-  while (current.getTime() + (duration * 60 * 1000) <= end.getTime()) {
-    slots.push(current.toTimeString().slice(0, 5))
-    current = new Date(current.getTime() + slotDuration)
-  }
-
-  return slots
+export function formatDate(dateString: string): string {
+  const date = new Date(dateString)
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  })
 }
 
 /**
- * Check if a date is in the past
+ * Format time for display
  */
-export function isPastDate(date: string | Date): boolean {
-  return new Date(date) < new Date()
+export function formatTime(timeString: string): string {
+  const [hours, minutes] = timeString.split(':')
+  const hour = parseInt(hours, 10)
+  const ampm = hour >= 12 ? 'PM' : 'AM'
+  const displayHour = hour % 12 || 12
+  return `${displayHour}:${minutes} ${ampm}`
 }
 
 /**
- * Get available dates for the next N days
+ * Format date and time together
  */
-export function getAvailableDates(
-  days: number = 30,
-  excludeWeekends: boolean = false,
-  availableDays?: string[]
-): string[] {
-  const dates: string[] = []
-  const today = new Date()
-  
-  for (let i = 1; i <= days; i++) {
-    const date = new Date(today)
-    date.setDate(today.getDate() + i)
-    
-    const dayName = date.toLocaleDateString('en-US', { weekday: 'long' })
-    
-    // Skip weekends if specified
-    if (excludeWeekends && (date.getDay() === 0 || date.getDay() === 6)) {
-      continue
-    }
-    
-    // Check if day is in available days
-    if (availableDays && !availableDays.includes(dayName)) {
-      continue
-    }
-    
-    dates.push(date.toISOString().split('T')[0])
+export function formatDateTime(dateString: string, timeString: string): string {
+  return `${formatDate(dateString)} at ${formatTime(timeString)}`
+}
+
+/**
+ * Calculate duration in human-readable format
+ */
+export function formatDuration(minutes: number): string {
+  if (minutes < 60) {
+    return `${minutes} min${minutes !== 1 ? 's' : ''}`
   }
   
-  return dates
-}
-
-/**
- * Validate email format
- */
-export function isValidEmail(email: string): boolean {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  return emailRegex.test(email)
-}
-
-/**
- * Generate a random ID
- */
-export function generateId(): string {
-  return Math.random().toString(36).substring(2) + Date.now().toString(36)
-}
-
-/**
- * Debounce function
- */
-export function debounce<T extends (...args: any[]) => any>(
-  func: T,
-  wait: number
-): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout
-  return (...args: Parameters<T>) => {
-    clearTimeout(timeout)
-    timeout = setTimeout(() => func(...args), wait)
+  const hours = Math.floor(minutes / 60)
+  const remainingMinutes = minutes % 60
+  
+  if (remainingMinutes === 0) {
+    return `${hours} hour${hours !== 1 ? 's' : ''}`
   }
+  
+  return `${hours}h ${remainingMinutes}m`
 }
 
 /**
- * Capitalize first letter of a string
+ * Truncate text with ellipsis
  */
-export function capitalize(str: string): string {
-  return str.charAt(0).toUpperCase() + str.slice(1)
+export function truncate(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text
+  return text.substring(0, maxLength).trim() + '...'
 }
 
 /**
- * Truncate text to specified length
+ * Combine class names
  */
-export function truncate(text: string, length: number): string {
-  if (text.length <= length) return text
-  return text.substring(0, length) + '...'
+export function classNames(...classes: (string | boolean | undefined | null)[]): string {
+  return classes.filter(Boolean).join(' ')
 }

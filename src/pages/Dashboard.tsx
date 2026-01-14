@@ -16,10 +16,11 @@ export function Dashboard() {
     { name: 'This Month', value: '34', icon: ChartBarIcon, change: '+8 from last month' },
   ]
 
+  // FIXED: Using proper UUIDs instead of simple integers
   const recentEvents: Event[] = [
     {
-      id: '1',
-      userId: 'user1',
+      id: 'a1b2c3d4-e5f6-4789-a1b2-c3d4e5f67890',
+      userId: 'user-uuid-1',
       title: 'Team Standup',
       description: 'Daily team synchronization and progress updates.',
       type: 'meeting',
@@ -38,8 +39,8 @@ export function Dashboard() {
       updatedAt: '2024-01-10'
     },
     {
-      id: '2',
-      userId: 'user1',
+      id: 'b2c3d4e5-f6a7-4890-b2c3-d4e5f6a78901',
+      userId: 'user-uuid-1',
       title: 'Product Demo',
       description: 'Showcase our latest product features and improvements.',
       type: 'webinar',
@@ -58,8 +59,8 @@ export function Dashboard() {
       updatedAt: '2024-01-12'
     },
     {
-      id: '3',
-      userId: 'user1',
+      id: 'c3d4e5f6-a7b8-4901-c3d4-e5f6a7b89012',
+      userId: 'user-uuid-1',
       title: 'Workshop: React Basics',
       description: 'Learn React fundamentals including components, hooks, and state management.',
       type: 'workshop',
