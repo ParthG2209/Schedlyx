@@ -10,11 +10,10 @@ import {
 export class BookingService {
   /**
    * Get an event by its ID or Slug
-   * FIXED: Added UUID check and robust error handling for PGRST116 (406 error)
    */
   static async getEventById(idOrSlug: string) {
     try {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug)
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug)
       
       let query = supabase
         .from('events')
@@ -37,7 +36,6 @@ export class BookingService {
       const { data, error } = await query.single()
 
       if (error) {
-        // PGRST116 means no row found; return null so the UI can handle it gracefully
         if (error.code === 'PGRST116') return null
         throw error
       }
@@ -49,18 +47,52 @@ export class BookingService {
     }
   }
 
+  /**
+   * Get available slots for an event
+   * FIXED: Corrected mapping to camelCase to match SlotAvailability interface
+   */
   static async getAvailableSlots(eventId: string): Promise<SlotAvailability[]> {
     try {
-      const { data, error } = await supabase.rpc('get_available_slots', {
+      const { data: rpcData, error: rpcError } = await supabase.rpc('get_available_slots', {
         p_event_id: eventId
       })
 
-      if (error) {
-        console.error('Error fetching available slots:', error)
-        throw new Error(error.message || 'Failed to fetch available slots')
+      if (rpcError) {
+        const { data: slotsData, error: slotsError } = await supabase
+          .from('time_slots')
+          .select('*')
+          .eq('event_id', eventId)
+          .eq('status', 'available')
+          .gt('start_time', new Date().toISOString())
+          .gt('available_count', 0)
+          .order('start_time', { ascending: true })
+
+        if (slotsError) {
+          throw new Error(slotsError.message || 'Failed to fetch available slots')
+        }
+
+        // FIXED: Mapping property names to match SlotAvailability interface
+        const transformedSlots: SlotAvailability[] = (slotsData || []).map((slot: any) => ({
+          slotId: slot.id,
+          startTime: slot.start_time,
+          endTime: slot.end_time,
+          totalCapacity: slot.total_capacity,
+          availableCount: slot.available_count,
+          price: slot.price
+        }))
+
+        return transformedSlots // Line 108 is now fixed
       }
       
-      return data || []
+      // FIXED: Also map RPC data to match SlotAvailability interface
+      return (rpcData || []).map((slot: any) => ({
+        slotId: slot.slot_id || slot.id,
+        startTime: slot.start_time,
+        endTime: slot.end_time,
+        totalCapacity: slot.total_capacity,
+        availableCount: slot.available_count,
+        price: slot.price
+      }))
     } catch (error: any) {
       console.error('BookingService.getAvailableSlots error:', error)
       throw error
@@ -91,7 +123,7 @@ export class BookingService {
 
   static async releaseSlotLock(lockId: string): Promise<boolean> {
     try {
-      const { data, error } = await supabase.rpc('release_slot_lock', {
+      const { data } = await supabase.rpc('release_slot_lock', {
         p_lock_id: lockId
       })
       return data
@@ -100,6 +132,10 @@ export class BookingService {
     }
   }
 
+  /**
+   * Complete booking
+   * FIXED: Corrected mapping from snake_case DB fields to camelCase ConfirmedBooking interface
+   */
   static async completeBooking(
     lockId: string,
     formData: BookingFormData
@@ -123,7 +159,23 @@ export class BookingService {
         .single()
 
       if (fetchError) throw fetchError
-      return booking as ConfirmedBooking
+
+      // FIXED: Properly map properties to ConfirmedBooking interface
+      return {
+        id: booking.id,
+        bookingReference: booking.booking_reference,
+        eventId: booking.event_id,
+        slotId: booking.slot_id,
+        firstName: booking.first_name,
+        lastName: booking.last_name,
+        email: booking.email,
+        phone: booking.phone,
+        date: booking.date,
+        time: booking.time,
+        status: booking.status,
+        confirmedAt: booking.confirmed_at,
+        createdAt: booking.created_at
+      } as ConfirmedBooking
     } catch (error: any) {
       throw error
     }
@@ -150,6 +202,10 @@ export class BookingService {
     }
   }
 
+  /**
+   * Get event slots
+   * FIXED: Corrected mapping to TimeSlot interface
+   */
   static async getEventSlots(eventId: string): Promise<TimeSlot[]> {
     try {
       const { data, error } = await supabase
@@ -159,7 +215,24 @@ export class BookingService {
         .order('start_time', { ascending: true })
 
       if (error) throw error
-      return data as TimeSlot[]
+
+      // FIXED: Map database snake_case to interface camelCase
+      return (data || []).map((slot: any) => ({
+        id: slot.id,
+        eventId: slot.event_id,
+        startTime: slot.start_time,
+        endTime: slot.end_time,
+        totalCapacity: slot.total_capacity,
+        bookedCount: slot.booked_count,
+        availableCount: slot.available_count,
+        status: slot.status,
+        isLocked: slot.is_locked,
+        lockedUntil: slot.locked_until,
+        price: slot.price,
+        currency: slot.currency,
+        createdAt: slot.created_at,
+        updatedAt: slot.updated_at
+      })) as TimeSlot[]
     } catch (error: any) {
       throw error
     }

@@ -12,9 +12,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce', // Fixed: Changed back from 'implicit' to 'pkce' for better security
-    // Fixed: Removed window.localStorage reference to prevent SSR crashes
+    flowType: 'pkce',
     storageKey: 'schedlyx-auth'
+  },
+  // FIXED: Add proper headers to prevent 406 errors
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    }
   }
 })
 

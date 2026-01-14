@@ -438,3 +438,96 @@ GRANT SELECT ON public.audit_log TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_event_owner(UUID) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.is_event_public(UUID) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.can_book_event(UUID) TO anon, authenticated;
+
+-- =====================================================
+-- CRITICAL FIX: Add RLS Policies for time_slots and slot_locks
+-- =====================================================
+
+-- Enable RLS on time_slots (if not already enabled)
+ALTER TABLE public.time_slots ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.slot_locks ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies if they exist (to avoid conflicts)
+DROP POLICY IF EXISTS "Anyone can view available time slots" ON public.time_slots;
+DROP POLICY IF EXISTS "Event owners can manage time slots" ON public.time_slots;
+DROP POLICY IF EXISTS "Users can view their own slot locks" ON public.slot_locks;
+DROP POLICY IF EXISTS "Anyone can create slot locks" ON public.slot_locks;
+
+-- =====================================================
+-- TIME SLOTS POLICIES
+-- =====================================================
+
+-- Allow everyone (including anonymous users) to view available time slots
+CREATE POLICY "Anyone can view available time slots"
+  ON public.time_slots FOR SELECT
+  TO anon, authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.id = time_slots.event_id
+        AND events.status = 'active'
+        AND events.visibility IN ('public', 'unlisted')
+    )
+  );
+
+-- Event owners can manage all time slots for their events
+CREATE POLICY "Event owners can manage time slots"
+  ON public.time_slots FOR ALL
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.id = time_slots.event_id
+        AND events.user_id = auth.uid()
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.events
+      WHERE events.id = time_slots.event_id
+        AND events.user_id = auth.uid()
+    )
+  );
+
+-- =====================================================
+-- SLOT LOCKS POLICIES
+-- =====================================================
+
+-- Users can view their own slot locks
+CREATE POLICY "Users can view their own slot locks"
+  ON public.slot_locks FOR SELECT
+  TO anon, authenticated
+  USING (
+    user_id = auth.uid() 
+    OR session_id = current_setting('request.jwt.claim.session_id', true)
+  );
+
+-- Anyone can create slot locks (needed for booking flow)
+CREATE POLICY "Anyone can create slot locks"
+  ON public.slot_locks FOR INSERT
+  TO anon, authenticated
+  WITH CHECK (true);
+
+-- Users can update their own slot locks
+CREATE POLICY "Users can update own slot locks"
+  ON public.slot_locks FOR UPDATE
+  TO anon, authenticated
+  USING (
+    user_id = auth.uid() 
+    OR session_id = current_setting('request.jwt.claim.session_id', true)
+  );
+
+-- =====================================================
+-- GRANT PERMISSIONS
+-- =====================================================
+
+-- Grant permissions on time_slots table
+GRANT SELECT ON public.time_slots TO anon, authenticated;
+GRANT ALL ON public.time_slots TO authenticated;
+
+-- Grant permissions on slot_locks table
+GRANT SELECT, INSERT, UPDATE ON public.slot_locks TO anon, authenticated;
+GRANT ALL ON public.slot_locks TO authenticated;
+
+-- Grant permissions on booking_attempts table (if it exists)
+GRANT SELECT, INSERT ON public.booking_attempts TO anon, authenticated;
