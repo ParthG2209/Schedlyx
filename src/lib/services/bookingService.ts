@@ -1,10 +1,10 @@
 // src/lib/services/bookingService.ts
 import { supabase } from '../supabase'
-import { 
-  SlotAvailability, 
-  BookingFormData, 
+import {
+  SlotAvailability,
+  BookingFormData,
   ConfirmedBooking,
-  TimeSlot 
+  TimeSlot
 } from '../../types/booking'
 
 export class BookingService {
@@ -14,7 +14,7 @@ export class BookingService {
   static async getEventById(idOrSlug: string) {
     try {
       const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrSlug)
-      
+
       let query = supabase
         .from('events')
         .select(`
@@ -39,7 +39,7 @@ export class BookingService {
         if (error.code === 'PGRST116') return null
         throw error
       }
-      
+
       return data
     } catch (error: any) {
       console.error('BookingService.getEventById error:', error)
@@ -50,55 +50,57 @@ export class BookingService {
   /**
    * Get available slots for an event
    */
+  /**
+  * Get available slots for an event
+  * CRITICAL: This MUST use the RPC function - no fallback allowed
+  * Direct time_slots queries bypass lock deduction and cause double-booking
+  */
   static async getAvailableSlots(eventId: string): Promise<SlotAvailability[]> {
     try {
-      // Pass session_id explicitly to RPC for anonymous user lock visibility
+      // ONLY path forward: RPC with session_id for lock visibility
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_available_slots', {
         p_event_id: eventId,
         p_session_id: this.getSessionId()
       })
 
       if (rpcError) {
-        // Fallback: fetch slots directly if RPC fails
-        const { data: slotsData, error: slotsError } = await supabase
-          .from('time_slots')
-          .select('*')
-          .eq('event_id', eventId)
-          .eq('status', 'available')
-          .gt('start_time', new Date().toISOString())
-          .gt('available_count', 0)
-          .order('start_time', { ascending: true })
+        // Log the actual error for debugging
+        console.error('BookingService.getAvailableSlots RPC error:', rpcError)
 
-        if (slotsError) {
-          throw new Error(slotsError.message || 'Failed to fetch available slots')
-        }
-
-        const transformedSlots: SlotAvailability[] = (slotsData || []).map((slot: any) => ({
-          slotId: slot.id,
-          startTime: slot.start_time,
-          endTime: slot.end_time,
-          totalCapacity: slot.total_capacity,
-          availableCount: slot.available_count,
-          price: slot.price
-        }))
-
-        return transformedSlots
+        // CRITICAL: Do NOT fallback to direct time_slots query
+        // That would bypass lock deduction and cause double-booking
+        throw new Error(
+          `Unable to load available slots. ${rpcError.code === 'PGRST202'
+            ? 'Database function not found - please run migrations.'
+            : 'Please refresh and try again.'
+          }`
+        )
       }
-      
+
+      // Transform RPC response to SlotAvailability format
       return (rpcData || []).map((slot: any) => ({
         slotId: slot.slot_id || slot.id,
         startTime: slot.start_time,
         endTime: slot.end_time,
         totalCapacity: slot.total_capacity,
-        availableCount: slot.available_count,
+        availableCount: slot.available_count, // Already accounts for active locks
         price: slot.price
       }))
     } catch (error: any) {
       console.error('BookingService.getAvailableSlots error:', error)
-      throw error
+
+      // Re-throw with user-friendly message
+      if (error.message && error.message.includes('Database function not found')) {
+        throw new Error(
+          'Booking system not configured. Please contact support or run database migrations.'
+        )
+      }
+
+      throw new Error(
+        error.message || 'Failed to load available slots. Please refresh the page and try again.'
+      )
     }
   }
-
   /**
    * Create a slot lock and return lock ID + server-side expiry time
    * FIXED: Returns server-generated expiry to prevent client-server time drift
@@ -119,7 +121,7 @@ export class BookingService {
       })
 
       if (error) throw new Error(error.message)
-      
+
       // Fetch the actual lock record to get server-generated expiry time
       const { data: lockData, error: fetchError } = await supabase
         .from('slot_locks')
