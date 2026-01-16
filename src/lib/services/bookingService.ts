@@ -48,27 +48,18 @@ export class BookingService {
   }
 
   /**
-   * Get available slots for an event
+   * FIXED: Get available slots using RPC with session_id
+   * This is the ONLY safe way to check availability
    */
-  /**
-  * Get available slots for an event
-  * CRITICAL: This MUST use the RPC function - no fallback allowed
-  * Direct time_slots queries bypass lock deduction and cause double-booking
-  */
   static async getAvailableSlots(eventId: string): Promise<SlotAvailability[]> {
     try {
-      // ONLY path forward: RPC with session_id for lock visibility
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_available_slots', {
         p_event_id: eventId,
         p_session_id: this.getSessionId()
       })
 
       if (rpcError) {
-        // Log the actual error for debugging
         console.error('BookingService.getAvailableSlots RPC error:', rpcError)
-
-        // CRITICAL: Do NOT fallback to direct time_slots query
-        // That would bypass lock deduction and cause double-booking
         throw new Error(
           `Unable to load available slots. ${rpcError.code === 'PGRST202'
             ? 'Database function not found - please run migrations.'
@@ -77,33 +68,64 @@ export class BookingService {
         )
       }
 
-      // Transform RPC response to SlotAvailability format
       return (rpcData || []).map((slot: any) => ({
         slotId: slot.slot_id || slot.id,
         startTime: slot.start_time,
         endTime: slot.end_time,
         totalCapacity: slot.total_capacity,
-        availableCount: slot.available_count, // Already accounts for active locks
+        availableCount: slot.available_count,
         price: slot.price
       }))
     } catch (error: any) {
       console.error('BookingService.getAvailableSlots error:', error)
-
-      // Re-throw with user-friendly message
-      if (error.message && error.message.includes('Database function not found')) {
-        throw new Error(
-          'Booking system not configured. Please contact support or run database migrations.'
-        )
-      }
-
       throw new Error(
         error.message || 'Failed to load available slots. Please refresh the page and try again.'
       )
     }
   }
+
   /**
-   * Create a slot lock and return lock ID + server-side expiry time
-   * FIXED: Returns server-generated expiry to prevent client-server time drift
+   * FIXED: Check if event is bookable before showing booking UI
+   */
+  static async canBookEvent(eventId: string, quantity: number = 1): Promise<{
+    canBook: boolean
+    reason: string | null
+    availableSlots: number
+  }> {
+    try {
+      const { data, error } = await supabase.rpc('can_book_event', {
+        p_event_id: eventId,
+        p_quantity: quantity
+      })
+
+      if (error) throw error
+
+      if (!data || data.length === 0) {
+        return {
+          canBook: false,
+          reason: 'Unable to verify booking eligibility',
+          availableSlots: 0
+        }
+      }
+
+      const result = data[0]
+      return {
+        canBook: result.can_book,
+        reason: result.can_book ? null : result.reason,
+        availableSlots: result.available_slots || 0
+      }
+    } catch (error: any) {
+      console.error('BookingService.canBookEvent error:', error)
+      return {
+        canBook: false,
+        reason: error.message || 'Failed to check booking eligibility',
+        availableSlots: 0
+      }
+    }
+  }
+
+  /**
+   * FIXED: Create slot lock with quantity validation
    */
   static async createSlotLock(
     slotId: string,
@@ -112,6 +134,11 @@ export class BookingService {
     userId?: string
   ): Promise<{ lockId: string, expiresAt: string }> {
     try {
+      // Validate quantity
+      if (quantity <= 0) {
+        throw new Error('Quantity must be greater than 0')
+      }
+
       const { data: lockId, error } = await supabase.rpc('create_slot_lock', {
         p_slot_id: slotId,
         p_user_id: userId || null,
@@ -140,6 +167,48 @@ export class BookingService {
     }
   }
 
+  /**
+   * FIXED: Verify lock validity with server
+   */
+  static async verifyLock(lockId: string): Promise<{
+    isValid: boolean
+    reason: string | null
+    expiresAt: string | null
+  }> {
+    try {
+      const { data, error } = await supabase.rpc('verify_lock', {
+        p_lock_id: lockId
+      })
+
+      if (error) throw error
+
+      if (!data || data.length === 0) {
+        return {
+          isValid: false,
+          reason: 'Lock not found',
+          expiresAt: null
+        }
+      }
+
+      const result = data[0]
+      return {
+        isValid: result.is_valid,
+        reason: result.is_valid ? null : result.reason,
+        expiresAt: result.expires_at
+      }
+    } catch (error: any) {
+      console.error('BookingService.verifyLock error:', error)
+      return {
+        isValid: false,
+        reason: error.message || 'Failed to verify lock',
+        expiresAt: null
+      }
+    }
+  }
+
+  /**
+   * Release slot lock
+   */
   static async releaseSlotLock(lockId: string): Promise<boolean> {
     try {
       const { data } = await supabase.rpc('release_slot_lock', {
@@ -152,7 +221,7 @@ export class BookingService {
   }
 
   /**
-   * Complete booking
+   * Complete booking with server-side validation
    */
   static async completeBooking(
     lockId: string,
@@ -198,6 +267,9 @@ export class BookingService {
     }
   }
 
+  /**
+   * Generate event slots (admin function)
+   */
   static async generateEventSlots(
     eventId: string,
     startDate: string,
@@ -220,39 +292,16 @@ export class BookingService {
   }
 
   /**
-   * Get event slots
+   * REMOVED: getEventSlots() - USE getAvailableSlots() INSTEAD
+   * Direct table access bypasses lock logic and causes double-booking
+   * 
+   * If you need admin slot management, use a separate RPC function
+   * that includes lock information explicitly
    */
-  static async getEventSlots(eventId: string): Promise<TimeSlot[]> {
-    try {
-      const { data, error } = await supabase
-        .from('time_slots')
-        .select('*')
-        .eq('event_id', eventId)
-        .order('start_time', { ascending: true })
 
-      if (error) throw error
-
-      return (data || []).map((slot: any) => ({
-        id: slot.id,
-        eventId: slot.event_id,
-        startTime: slot.start_time,
-        endTime: slot.end_time,
-        totalCapacity: slot.total_capacity,
-        bookedCount: slot.booked_count,
-        availableCount: slot.available_count,
-        status: slot.status,
-        isLocked: slot.is_locked,
-        lockedUntil: slot.locked_until,
-        price: slot.price,
-        currency: slot.currency,
-        createdAt: slot.created_at,
-        updatedAt: slot.updated_at
-      })) as TimeSlot[]
-    } catch (error: any) {
-      throw error
-    }
-  }
-
+  /**
+   * Get session ID for lock tracking
+   */
   private static getSessionId(): string {
     let sessionId = sessionStorage.getItem('booking_session_id')
     if (!sessionId) {
@@ -262,12 +311,18 @@ export class BookingService {
     return sessionId
   }
 
+  /**
+   * Format slot time for display
+   */
   static formatSlotTime(startTime: string, endTime: string): string {
     const start = new Date(startTime)
     const end = new Date(endTime)
     return `${start.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
   }
 
+  /**
+   * Get time remaining from expiry timestamp
+   */
   static getTimeRemaining(expiresAt: string): number {
     const expires = new Date(expiresAt).getTime()
     return Math.max(0, Math.floor((expires - Date.now()) / 1000))
