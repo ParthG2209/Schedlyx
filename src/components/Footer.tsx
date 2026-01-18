@@ -12,7 +12,7 @@ export function Footer() {
   const currentYear = new Date().getFullYear()
 
   return (
-    <footer className="my-8 px-4 max-w-7xl mx-auto">
+    <footer className="my-8 px-4 w-full">
       <div className="relative bg-white rounded-3xl max-w-7xl mx-auto px-4 py-10 flex flex-col md:flex-row justify-between items-center gap-6">
         {/* Decorative tape elements */}
         <div className="hidden md:block absolute -top-4 -left-8 w-[80px] h-[36px] scale-75">
@@ -34,6 +34,9 @@ export function Footer() {
             </Link>
             <p className='text-gray-600 font-medium text-base w-full md:w-4/5'>
               Open-source scheduling and event coordination platform for seamless time management.
+            </p>
+            <p className='text-gray-500 text-sm w-full md:w-4/5 mt-1'>
+              Built for mentors, students, hackathons, workshops, interviews, and communities. Manage personal bookings, event registrations, and group sessions from one unified dashboard.
             </p>
           </div>
 

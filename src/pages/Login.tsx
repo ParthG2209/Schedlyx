@@ -1,18 +1,47 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import { useAuthStore } from '../stores/authStore'
 
+/**
+ * Fixed Login component
+ * 
+ * Changes made:
+ * - Removed "Remember Me" checkbox (Supabase already persists sessions)
+ * - Removed manual localStorage manipulation
+ * - Simplified form state
+ */
 export function Login() {
+  const navigate = useNavigate()
+  const { 
+    signIn, 
+    signInWithGoogle, 
+    error, 
+    loading, 
+    clearError,
+    emailVerificationRequired,
+    verificationEmail
+  } = useAuthStore()
+  
   const [showPassword, setShowPassword] = useState(false)
   const [formData, setFormData] = useState({
     email: '',
     password: ''
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement login logic with Supabase
-    console.log('Login attempt:', formData)
+    clearError()
+    
+    try {
+      await signIn(formData.email, formData.password)
+      
+      // Redirect to dashboard on success
+      navigate('/dashboard')
+    } catch (error: any) {
+      // Error is handled by the store
+      // If email verification required, user will see the error message
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -20,6 +49,22 @@ export function Login() {
       ...prev,
       [e.target.name]: e.target.value
     }))
+  }
+
+  const handleGoogleSignIn = async () => {
+    clearError()
+    try {
+      await signInWithGoogle()
+      // OAuth redirect will handle the rest
+    } catch (error: any) {
+      // Error is handled by the store
+    }
+  }
+
+  const handleGoToVerification = () => {
+    navigate('/verify-email', { 
+      state: { email: verificationEmail || formData.email } 
+    })
   }
 
   return (
@@ -37,6 +82,34 @@ export function Login() {
           </p>
         </div>
         
+        {/* Error Message */}
+        {error && (
+          <div className="rounded-md bg-red-50 p-4">
+            <div className="flex flex-col">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  Authentication Error
+                </h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{error}</p>
+                </div>
+              </div>
+              
+              {/* Show verification link if email not confirmed */}
+              {emailVerificationRequired && (
+                <div className="mt-3 ml-3">
+                  <button
+                    onClick={handleGoToVerification}
+                    className="text-sm font-medium text-primary-600 hover:text-primary-500"
+                  >
+                    Go to verification page →
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
@@ -53,6 +126,7 @@ export function Login() {
                 placeholder="Enter your email"
                 value={formData.email}
                 onChange={handleChange}
+                disabled={loading}
               />
             </div>
             
@@ -71,11 +145,13 @@ export function Login() {
                   placeholder="Enter your password"
                   value={formData.password}
                   onChange={handleChange}
+                  disabled={loading}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeSlashIcon className="h-5 w-5 text-gray-400" />
@@ -87,19 +163,7 @@ export function Login() {
             </div>
           </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center">
-              <input
-                id="remember-me"
-                name="remember-me"
-                type="checkbox"
-                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
-              />
-              <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900">
-                Remember me
-              </label>
-            </div>
-
+          <div className="flex items-center justify-end">
             <div className="text-sm">
               <Link to="/forgot-password" className="font-medium text-primary-600 hover:text-primary-500">
                 Forgot your password?
@@ -110,9 +174,10 @@ export function Login() {
           <div>
             <button
               type="submit"
-              className="btn-primary w-full text-sm py-3"
+              className="btn-primary w-full text-sm py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading}
             >
-              Sign in
+              {loading ? 'Signing in...' : 'Sign in'}
             </button>
           </div>
 
@@ -129,7 +194,9 @@ export function Login() {
             <div className="mt-6">
               <button
                 type="button"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

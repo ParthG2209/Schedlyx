@@ -1,14 +1,29 @@
 import { useAuthStore } from '../stores/authStore'
+export { useAuthStore }
 
 export function useAuth() {
-  const { user, loading, signIn, signUp, signOut } = useAuthStore()
+  const { 
+    user, 
+    loading, 
+    error,
+    signIn, 
+    signUp, 
+    signInWithGoogle,
+    signOut,
+    resetPassword,
+    clearError
+  } = useAuthStore()
 
   return {
     user,
     loading,
+    error,
     isAuthenticated: !!user,
     signIn,
     signUp,
-    signOut
+    signInWithGoogle,
+    signOut,
+    resetPassword,
+    clearError
   }
 }

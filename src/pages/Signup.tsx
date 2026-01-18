@@ -1,9 +1,14 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
+import { useAuthStore } from '../stores/authStore'
 
 export function Signup() {
+  const navigate = useNavigate()
+  const { signUp, signInWithGoogle, error, loading, clearError } = useAuthStore()
+  
   const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -11,11 +16,58 @@ export function Signup() {
     password: '',
     confirmPassword: ''
   })
+  const [agreeToTerms, setAgreeToTerms] = useState(false)
+  const [validationError, setValidationError] = useState<string | null>(null)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const validateForm = () => {
+    // Password validation
+    if (formData.password.length < 6) {
+      setValidationError('Password must be at least 6 characters long')
+      return false
+    }
+
+    // Password match validation
+    if (formData.password !== formData.confirmPassword) {
+      setValidationError('Passwords do not match')
+      return false
+    }
+
+    // Terms validation
+    if (!agreeToTerms) {
+      setValidationError('You must agree to the Terms of Service and Privacy Policy')
+      return false
+    }
+
+    setValidationError(null)
+    return true
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // TODO: Implement signup logic with Supabase
-    console.log('Signup attempt:', formData)
+    clearError()
+    
+    if (!validateForm()) {
+      return
+    }
+
+    try {
+      await signUp(formData.email, formData.password, {
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        first_name: formData.firstName,
+        last_name: formData.lastName
+      })
+      
+      // Always redirect to verification page after signup
+      // (Email confirmation is required, so user won't be auto-logged in)
+      navigate('/verify-email', { 
+        state: { email: formData.email },
+        replace: true // Prevent going back to signup form
+      })
+    } catch (error: any) {
+      console.error('Signup error:', error)
+      // Error is handled by the store and will be displayed
+    }
   }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -23,7 +75,23 @@ export function Signup() {
       ...prev,
       [e.target.name]: e.target.value
     }))
+    // Clear validation error when user types
+    if (validationError) {
+      setValidationError(null)
+    }
   }
+
+  const handleGoogleSignIn = async () => {
+    clearError()
+    try {
+      await signInWithGoogle()
+      // OAuth redirect will handle the rest
+    } catch (error: any) {
+      console.error('Google sign in error:', error)
+    }
+  }
+
+  const displayError = validationError || error
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -40,6 +108,22 @@ export function Signup() {
           </p>
         </div>
         
+        {/* Error Message */}
+        {displayError && (
+          <div className="rounded-md bg-red-50 p-4">
+            <div className="flex">
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  {validationError ? 'Validation Error' : 'Registration Error'}
+                </h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>{displayError}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -56,6 +140,7 @@ export function Signup() {
                   placeholder="First name"
                   value={formData.firstName}
                   onChange={handleChange}
+                  disabled={loading}
                 />
               </div>
               
@@ -72,6 +157,7 @@ export function Signup() {
                   placeholder="Last name"
                   value={formData.lastName}
                   onChange={handleChange}
+                  disabled={loading}
                 />
               </div>
             </div>
@@ -90,6 +176,7 @@ export function Signup() {
                 placeholder="Enter your email"
                 value={formData.email}
                 onChange={handleChange}
+                disabled={loading}
               />
             </div>
             
@@ -105,14 +192,17 @@ export function Signup() {
                   autoComplete="new-password"
                   required
                   className="input-field pr-10"
-                  placeholder="Create a password"
+                  placeholder="Create a password (min. 6 characters)"
                   value={formData.password}
                   onChange={handleChange}
+                  disabled={loading}
+                  minLength={6}
                 />
                 <button
                   type="button"
                   className="absolute inset-y-0 right-0 pr-3 flex items-center"
                   onClick={() => setShowPassword(!showPassword)}
+                  disabled={loading}
                 >
                   {showPassword ? (
                     <EyeSlashIcon className="h-5 w-5 text-gray-400" />
@@ -127,17 +217,32 @@ export function Signup() {
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700">
                 Confirm password
               </label>
-              <input
-                id="confirmPassword"
-                name="confirmPassword"
-                type="password"
-                autoComplete="new-password"
-                required
-                className="input-field mt-1"
-                placeholder="Confirm your password"
-                value={formData.confirmPassword}
-                onChange={handleChange}
-              />
+              <div className="mt-1 relative">
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
+                  required
+                  className="input-field pr-10"
+                  placeholder="Confirm your password"
+                  value={formData.confirmPassword}
+                  onChange={handleChange}
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  disabled={loading}
+                >
+                  {showConfirmPassword ? (
+                    <EyeSlashIcon className="h-5 w-5 text-gray-400" />
+                  ) : (
+                    <EyeIcon className="h-5 w-5 text-gray-400" />
+                  )}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -148,6 +253,9 @@ export function Signup() {
               type="checkbox"
               required
               className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+              checked={agreeToTerms}
+              onChange={(e) => setAgreeToTerms(e.target.checked)}
+              disabled={loading}
             />
             <label htmlFor="agree-terms" className="ml-2 block text-sm text-gray-900">
               I agree to the{' '}
@@ -164,9 +272,10 @@ export function Signup() {
           <div>
             <button
               type="submit"
-              className="btn-primary w-full text-sm py-3"
+              className="btn-primary w-full text-sm py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={loading}
             >
-              Create account
+              {loading ? 'Creating account...' : 'Create account'}
             </button>
           </div>
 
@@ -183,7 +292,9 @@ export function Signup() {
             <div className="mt-6">
               <button
                 type="button"
-                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50"
+                onClick={handleGoogleSignIn}
+                disabled={loading}
+                className="w-full inline-flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24">
                   <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>

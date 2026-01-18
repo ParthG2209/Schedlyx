@@ -7,35 +7,120 @@ if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Missing Supabase environment variables')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    flowType: 'pkce', // Fixed: Changed back from 'implicit' to 'pkce' for better security
+    // Fixed: Removed window.localStorage reference to prevent SSR crashes
+    storageKey: 'schedlyx-auth'
+  }
+})
 
 // Auth helpers
 export const auth = {
+  // Email/Password Sign Up - with email confirmation required
   signUp: async (email: string, password: string, metadata?: Record<string, any>) => {
-    return await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: metadata
+        data: metadata,
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
       }
     })
+    
+    if (error) throw error
+    return data
   },
 
+  // Email/Password Sign In
   signIn: async (email: string, password: string) => {
-    return await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password
     })
+    
+    if (error) throw error
+    return data
   },
 
+  // Google OAuth Sign In
+  signInWithGoogle: async () => {
+    const baseUrl = window.location.origin
+    
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${baseUrl}/auth/callback`,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        },
+        skipBrowserRedirect: false
+      }
+    })
+    
+    if (error) throw error
+    return data
+  },
+
+  // Sign Out
   signOut: async () => {
-    return await supabase.auth.signOut()
+    const { error } = await supabase.auth.signOut()
+    if (error) throw error
   },
 
-  getCurrentUser: () => {
-    return supabase.auth.getUser()
+  // Get Current User
+  getCurrentUser: async () => {
+    const { data, error } = await supabase.auth.getUser()
+    if (error) throw error
+    return data
   },
 
+  // Get Session
+  getSession: async () => {
+    const { data, error } = await supabase.auth.getSession()
+    if (error) throw error
+    return data
+  },
+
+  // Reset Password
+  resetPassword: async (email: string) => {
+    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/reset-password`
+    })
+    
+    if (error) throw error
+    return data
+  },
+
+  // Update Password
+  updatePassword: async (newPassword: string) => {
+    const { data, error } = await supabase.auth.updateUser({
+      password: newPassword
+    })
+    
+    if (error) throw error
+    return data
+  },
+
+  // Resend confirmation email
+  resendConfirmationEmail: async (email: string) => {
+    const { data, error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`
+      }
+    })
+    
+    if (error) throw error
+    return data
+  },
+
+  // Listen for Auth State Changes
   onAuthStateChange: (callback: (event: string, session: any) => void) => {
     return supabase.auth.onAuthStateChange(callback)
   }
