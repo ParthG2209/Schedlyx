@@ -1,6 +1,7 @@
 // src/components/booking/BookingConfirmation.tsx
 // Success screen after completing booking
 
+
 import { CheckCircleIcon, CalendarIcon, EnvelopeIcon, PrinterIcon } from '@heroicons/react/24/outline'
 import { ConfirmedBooking } from '../../types/booking'
 

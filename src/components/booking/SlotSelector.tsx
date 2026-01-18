@@ -1,6 +1,6 @@
 // src/components/booking/SlotSelector.tsx
 // BookMyShow-style slot selection interface
-
+// THIS FILE IS DEPRECATED AND NOT INTENDED TO USE
 import { useState, useEffect } from 'react'
 import { ClockIcon, UserGroupIcon, CalendarIcon } from '@heroicons/react/24/outline'
 import { SlotAvailability } from '../../types/booking'

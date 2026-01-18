@@ -1,5 +1,6 @@
 // src/components/booking/BookingForm.tsx
 // User details form during booking process
+// THIS FILE IS DEPRECATED AND NOT INTENDED TO USE
 
 import { useState, useEffect } from 'react'
 import { ClockIcon } from '@heroicons/react/24/outline'

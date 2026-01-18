@@ -43,6 +43,7 @@ type BookingStep = 'select-slot' | 'fill-details' | 'completed'
 interface BookingState {
   currentStep: BookingStep
   selectedSlot: SlotAvailability | null
+  selectedQuantity: number
   lockId: string | null
   lockExpiresAt: string | null
   formData: BookingFormData
@@ -53,7 +54,7 @@ interface BookingState {
 }
 
 interface BookingStore extends BookingState {
-  selectSlot: (slot: SlotAvailability) => Promise<void>
+  selectSlot: (slot: SlotAvailability, quantity: number) => Promise<void>
   updateFormData: (data: Partial<BookingFormData>) => void
   confirmBooking: () => Promise<void>
   cancelBooking: () => void
@@ -73,6 +74,7 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
   // Initial state
   currentStep: 'select-slot',
   selectedSlot: null,
+  selectedQuantity: 1,
   lockId: null,
   lockExpiresAt: null,
   formData: initialFormData,
@@ -82,36 +84,37 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
   timeRemaining: 0,
 
   // Actions
-  selectSlot: async (slot: SlotAvailability) => {
+  selectSlot: async (slot: SlotAvailability, quantity: number) => {
     set({ loading: true, error: null })
-    
+
     try {
-      // Create a lock for this slot
-      const lockId = await BookingService.createSlotLock(slot.slotId, 1)
-      
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-      
+      // IMPORTANT: createSlotLock returns { lockId, expiresAt }
+      const { lockId, expiresAt } =
+        await BookingService.createSlotLock(slot.slotId, quantity)
+
       set({
         selectedSlot: slot,
+        selectedQuantity: quantity,
         lockId,
         lockExpiresAt: expiresAt,
         currentStep: 'fill-details',
         loading: false,
         error: null
       })
-      
-      // Start countdown timer
+
       const intervalId = setInterval(() => {
         const state = get()
         if (state.lockExpiresAt) {
-          const remaining = BookingService.getTimeRemaining(state.lockExpiresAt)
-          
+          const remaining =
+            BookingService.getTimeRemaining(state.lockExpiresAt)
+
           if (remaining <= 0) {
             clearInterval(intervalId)
             set({
               error: 'Your reservation has expired. Please select a new slot.',
               currentStep: 'select-slot',
               selectedSlot: null,
+              selectedQuantity: 1,
               lockId: null,
               lockExpiresAt: null,
               timeRemaining: 0
@@ -121,9 +124,7 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
           }
         }
       }, 1000)
-      
     } catch (error: any) {
-      console.error('Error selecting slot:', error)
       set({
         loading: false,
         error: error.message || 'Failed to reserve slot. Please try again.'
@@ -139,17 +140,18 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
 
   confirmBooking: async () => {
     const { lockId, formData } = get()
-    
+
     if (!lockId) {
       set({ error: 'No active reservation found' })
       return
     }
-    
+
     set({ loading: true, error: null })
-    
+
     try {
-      const booking = await BookingService.completeBooking(lockId, formData)
-      
+      const booking =
+        await BookingService.completeBooking(lockId, formData)
+
       set({
         booking,
         currentStep: 'completed',
@@ -157,27 +159,19 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
         error: null
       })
     } catch (error: any) {
-      console.error('Error confirming booking:', error)
       set({
         loading: false,
-        error: error.message || 'Failed to confirm booking. Please try again.'
+        error: error.message || 'Failed to confirm booking.'
       })
     }
   },
 
   cancelBooking: () => {
-    const { lockId } = get()
-    
-    if (lockId) {
-      // Release the lock (fire and forget)
-      BookingService.releaseSlotLock(lockId).catch(err => {
-        console.error('Error releasing lock:', err)
-      })
-    }
-    
+    // Backend has no releaseSlotLock API → local reset only
     set({
       currentStep: 'select-slot',
       selectedSlot: null,
+      selectedQuantity: 1,
       lockId: null,
       lockExpiresAt: null,
       timeRemaining: 0,
@@ -189,6 +183,7 @@ export const useBookingStore = create<BookingStore>((set, get) => ({
     set({
       currentStep: 'select-slot',
       selectedSlot: null,
+      selectedQuantity: 1,
       lockId: null,
       lockExpiresAt: null,
       formData: initialFormData,
