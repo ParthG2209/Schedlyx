@@ -1,4 +1,4 @@
--- supabase/migrations/20240102000003_test_booking_system.sql
+-- supabase/tests/booking_system.sql
 -- Test Suite for Booking System
 -- Run these tests in Supabase SQL Editor to verify functionality
 -- DONT RUN FOR PRODUCTION FOR TESTING PURPOSES ONLY
