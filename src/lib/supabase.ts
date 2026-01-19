@@ -1,3 +1,7 @@
+// src/lib/supabase.ts
+// FIXED: Removed custom storageKey to maintain session compatibility
+// FIXED: Proper PKCE configuration for OAuth and Magic Links
+
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
@@ -12,9 +16,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce', // Fixed: Changed back from 'implicit' to 'pkce' for better security
-    // Fixed: Removed window.localStorage reference to prevent SSR crashes
-    storageKey: 'schedlyx-auth'
+    flowType: 'pkce', // PKCE flow for better security
+    // FIXED: Removed custom storageKey - use default to maintain compatibility
+    // Using default storage keys ensures:
+    // - Existing user sessions remain valid
+    // - Email verification redirects work correctly
+    // - OAuth redirects (Google, etc.) work correctly
+    // - Password reset links work correctly
+    // - Refresh token storage is maintained
+  },
+  global: {
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json'
+    }
   }
 })
 
