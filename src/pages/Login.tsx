@@ -1,15 +1,21 @@
+// src/pages/Login.tsx
+// FIXED: Removed "Remember Me" checkbox (Supabase already persists sessions)
+// FIXED: Removed manual localStorage manipulation
+// FIXED: Simplified form state and auth flow
+
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import { useAuthStore } from '../stores/authStore'
 
 /**
- * Fixed Login component
+ * Login page component
  * 
- * Changes made:
- * - Removed "Remember Me" checkbox (Supabase already persists sessions)
+ * FIXES:
+ * - Removed "Remember Me" checkbox (Supabase handles session persistence)
  * - Removed manual localStorage manipulation
  * - Simplified form state
+ * - Clean error handling with email verification flow
  */
 export function Login() {
   const navigate = useNavigate()
