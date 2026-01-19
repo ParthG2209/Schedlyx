@@ -1,5 +1,5 @@
 // src/pages/UpdatedBookingFlowPage.tsx
-// Updated booking flow using enhanced components with better UX
+// REWRITTEN: Atomic flow with strict error handling
 
 import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
@@ -8,6 +8,8 @@ import { useBookingStore } from '../stores/bookingStore'
 import { EnhancedSlotSelector } from '../components/booking/EnhancedSlotSelector'
 import { EnhancedBookingForm } from '../components/booking/EnhancedBookingForm'
 import { EnhancedBookingConfirmation } from '../components/booking/EnhancedBookingConfirmation'
+import { BookingErrorHandler } from '../components/booking/BookingErrorHandler'
+import { BookingErrorType } from '../lib/services/bookingService'
 
 export function UpdatedBookingFlowPage() {
   const { eventId } = useParams<{ eventId: string }>()
@@ -20,6 +22,7 @@ export function UpdatedBookingFlowPage() {
     formData,
     booking,
     error,
+    errorType,
     loading,
     timeRemaining,
     selectSlot,
@@ -43,30 +46,26 @@ export function UpdatedBookingFlowPage() {
     }
   }, [eventId, navigate])
 
+  // FIXED: Atomic slot selection - pass through directly to store
   const handleSelectSlot = async (slot: any, quantity: number) => {
-    try {
-      clearError()
-      await selectSlot(slot, quantity)
-    } catch (error: any) {
-      console.error('BookingFlowPage: Failed to select slot:', error)
-    }
+    clearError() // Clear any previous errors
+    await selectSlot(slot, quantity)
   }
 
+  // FIXED: Atomic booking confirmation
   const handleConfirmBooking = async () => {
-    try {
-      clearError()
-      await confirmBooking()
-    } catch (error: any) {
-      console.error('BookingFlowPage: Failed to confirm booking:', error)
-    }
+    clearError() // Clear any previous errors
+    await confirmBooking()
   }
 
+  // FIXED: Handle cancellation with confirmation
   const handleCancelBooking = () => {
     if (confirm('Are you sure you want to cancel this booking? Your slot reservation will be released.')) {
       cancelBooking()
     }
   }
 
+  // FIXED: Handle back navigation
   const handleBack = () => {
     if (currentStep === 'fill-details') {
       if (confirm('Going back will release your slot reservation. Continue?')) {
@@ -77,9 +76,25 @@ export function UpdatedBookingFlowPage() {
     }
   }
 
+  // FIXED: Handle close after completion
   const handleClose = () => {
     resetBooking()
     navigate(`/event/${eventId}`)
+  }
+
+  // FIXED: Handle error retry
+  const handleErrorRetry = () => {
+    clearError()
+    // For RPC errors, try reloading slots
+    if (errorType === BookingErrorType.RPC_UNAVAILABLE) {
+      window.location.reload()
+    }
+  }
+
+  // FIXED: Handle error reset
+  const handleErrorReset = () => {
+    cancelBooking() // This will reset to select-slot step
+    clearError()
   }
 
   const getStepTitle = () => {
@@ -93,13 +108,14 @@ export function UpdatedBookingFlowPage() {
 
   const getStepDescription = () => {
     switch (currentStep) {
-      case 'select-slot': return 'Choose your preferred time slot'
+      case 'select-slot': return 'Choose your preferred time slot and quantity'
       case 'fill-details': return 'Complete your booking information'
       case 'completed': return 'Your booking has been confirmed'
       default: return ''
     }
   }
 
+  // FIXED: Validate event ID
   if (!eventId) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -188,34 +204,33 @@ export function UpdatedBookingFlowPage() {
           </div>
         </div>
 
-        {/* Error Display */}
-        {error && (
-          <div className="mb-6 bg-red-50 border-2 border-red-200 rounded-lg p-4 shadow-sm">
-            <div className="flex items-start">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd"/>
-                </svg>
-              </div>
-              <div className="ml-3 flex-1">
-                <h3 className="text-sm font-medium text-red-900">Error</h3>
-                <p className="text-sm text-red-800 mt-1">{error}</p>
-                {error.includes('RPC') && (
-                  <p className="text-xs text-red-700 mt-2">
-                    💡 Tip: Make sure the database migration has been run successfully.
-                  </p>
-                )}
-              </div>
-              <button
-                onClick={clearError}
-                className="ml-3 text-red-400 hover:text-red-600"
-                aria-label="Dismiss error"
-              >
-                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                </svg>
-              </button>
-            </div>
+        {/* FIXED: Error Display with specific handling */}
+        {error && errorType && (
+          <div className="mb-6">
+            <BookingErrorHandler
+              error={error}
+              errorType={errorType}
+              onRetry={
+                errorType === BookingErrorType.RPC_UNAVAILABLE || 
+                errorType === BookingErrorType.SYSTEM_ERROR
+                  ? handleErrorRetry 
+                  : undefined
+              }
+              onReset={
+                errorType === BookingErrorType.LOCK_EXPIRED ||
+                errorType === BookingErrorType.SLOT_FULL ||
+                errorType === BookingErrorType.INVALID_LOCK ||
+                errorType === BookingErrorType.CAPACITY_EXCEEDED ||
+                errorType === BookingErrorType.SLOT_NOT_FOUND
+                  ? handleErrorReset
+                  : undefined
+              }
+              onDismiss={
+                errorType === BookingErrorType.INVALID_QUANTITY
+                  ? clearError
+                  : undefined
+              }
+            />
           </div>
         )}
 
