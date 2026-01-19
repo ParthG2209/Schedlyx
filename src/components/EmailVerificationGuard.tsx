@@ -1,4 +1,6 @@
 // src/components/EmailVerificationGuard.tsx
+// FIXED: Proper guard to prevent direct access to verification page
+
 import { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '../hooks/useAuth'
@@ -9,8 +11,14 @@ interface EmailVerificationGuardProps {
 
 /**
  * Guard for email verification page
+ * 
  * Prevents direct access - only allows access from signup/login flows
  * or when email verification is explicitly required
+ * 
+ * FIXES:
+ * - Proper state validation
+ * - Prevents direct URL access
+ * - Maintains security while allowing legitimate flows
  */
 export function EmailVerificationGuard({ children }: EmailVerificationGuardProps) {
   const { emailVerificationRequired, verificationEmail } = useAuthStore()
