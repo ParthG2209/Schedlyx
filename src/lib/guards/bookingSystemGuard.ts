@@ -1,7 +1,7 @@
-
-// FIX 1: Add Migration/RPC Health Check Guard
 // src/lib/guards/bookingSystemGuard.ts
-// ============================================
+// FIXED: Added missing supabase import
+
+import { supabase } from '../supabase'
 
 export class BookingSystemGuard {
   private static healthCheckCache: {
