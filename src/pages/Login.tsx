@@ -1,24 +1,14 @@
 // src/pages/Login.tsx
-// FIXED: Removed "Remember Me" checkbox (Supabase already persists sessions)
-// FIXED: Removed manual localStorage manipulation
-// FIXED: Simplified form state and auth flow
+// FIXED: UX explanations for session persistence, error classification
 
-import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
-import { useAuthStore } from '../stores/authStore'
+import { useAuthStore, AuthErrorType } from '../stores/authStore'
 
-/**
- * Login page component
- * 
- * FIXES:
- * - Removed "Remember Me" checkbox (Supabase handles session persistence)
- * - Removed manual localStorage manipulation
- * - Simplified form state
- * - Clean error handling with email verification flow
- */
 export function Login() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { 
     signIn, 
     signInWithGoogle, 
@@ -34,6 +24,28 @@ export function Login() {
     email: '',
     password: ''
   })
+  const [showSessionInfo, setShowSessionInfo] = useState(false)
+
+  // Check if user was redirected from a protected route
+  const from = (location.state as any)?.from?.pathname || '/dashboard'
+
+  // Show session persistence info if browser might clear storage
+  useEffect(() => {
+    const isPrivateBrowsing = checkIfPrivateBrowsing()
+    setShowSessionInfo(isPrivateBrowsing)
+  }, [])
+
+  // DEFENSIVE: Detect private browsing mode
+  function checkIfPrivateBrowsing(): boolean {
+    try {
+      // Try to use sessionStorage
+      sessionStorage.setItem('__test', 'test')
+      sessionStorage.removeItem('__test')
+      return false
+    } catch (e) {
+      return true
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -42,11 +54,10 @@ export function Login() {
     try {
       await signIn(formData.email, formData.password)
       
-      // Redirect to dashboard on success
-      navigate('/dashboard')
+      // Redirect to intended destination or dashboard
+      navigate(from, { replace: true })
     } catch (error: any) {
-      // Error is handled by the store
-      // If email verification required, user will see the error message
+      // Error is handled by the store with classification
     }
   }
 
@@ -61,7 +72,6 @@ export function Login() {
     clearError()
     try {
       await signInWithGoogle()
-      // OAuth redirect will handle the rest
     } catch (error: any) {
       // Error is handled by the store
     }
@@ -71,6 +81,73 @@ export function Login() {
     navigate('/verify-email', { 
       state: { email: verificationEmail || formData.email } 
     })
+  }
+
+  // Get user-friendly error message and retry guidance
+  const getErrorUI = () => {
+    if (!error) return null
+
+    const isRetryable = error.retryable
+    const errorType = error.type
+
+    return (
+      <div className="rounded-md bg-red-50 border border-red-200 p-4">
+        <div className="flex flex-col">
+          <div>
+            <h3 className="text-sm font-medium text-red-800">
+              {errorType === AuthErrorType.NETWORK_ERROR && 'Connection Error'}
+              {errorType === AuthErrorType.INVALID_CREDENTIALS && 'Invalid Credentials'}
+              {errorType === AuthErrorType.EMAIL_NOT_VERIFIED && 'Email Not Verified'}
+              {errorType === AuthErrorType.SESSION_EXPIRED && 'Session Expired'}
+              {errorType === AuthErrorType.UNKNOWN && 'Sign In Error'}
+            </h3>
+            <div className="mt-2 text-sm text-red-700">
+              <p>{error.userMessage}</p>
+            </div>
+          </div>
+          
+          {/* Error-specific actions */}
+          {emailVerificationRequired && (
+            <div className="mt-3">
+              <button
+                onClick={handleGoToVerification}
+                className="text-sm font-medium text-primary-600 hover:text-primary-500"
+              >
+                Go to verification page →
+              </button>
+            </div>
+          )}
+
+          {errorType === AuthErrorType.NETWORK_ERROR && (
+            <div className="mt-3 text-xs text-red-600">
+              <p>Tip: Check your internet connection and try again.</p>
+            </div>
+          )}
+
+          {errorType === AuthErrorType.INVALID_CREDENTIALS && (
+            <div className="mt-3 text-xs text-red-600">
+              <p>
+                Forgot your password?{' '}
+                <Link to="/forgot-password" className="underline">
+                  Reset it here
+                </Link>
+              </p>
+            </div>
+          )}
+
+          {isRetryable && errorType !== AuthErrorType.EMAIL_NOT_VERIFIED && (
+            <div className="mt-3">
+              <button
+                onClick={() => clearError()}
+                className="text-sm font-medium text-red-600 hover:text-red-500"
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -87,34 +164,33 @@ export function Login() {
             </Link>
           </p>
         </div>
-        
-        {/* Error Message */}
-        {error && (
-          <div className="rounded-md bg-red-50 p-4">
-            <div className="flex flex-col">
+
+        {/* Session persistence notice */}
+        {showSessionInfo && (
+          <div className="rounded-md bg-blue-50 border border-blue-200 p-4">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-blue-400" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                </svg>
+              </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">
-                  Authentication Error
+                <h3 className="text-sm font-medium text-blue-800">
+                  About Session Persistence
                 </h3>
-                <div className="mt-2 text-sm text-red-700">
-                  <p>{error}</p>
+                <div className="mt-2 text-sm text-blue-700">
+                  <p>
+                    We automatically keep you signed in using secure browser storage.
+                    In private/incognito mode, you'll need to sign in again when you close the browser.
+                  </p>
                 </div>
               </div>
-              
-              {/* Show verification link if email not confirmed */}
-              {emailVerificationRequired && (
-                <div className="mt-3 ml-3">
-                  <button
-                    onClick={handleGoToVerification}
-                    className="text-sm font-medium text-primary-600 hover:text-primary-500"
-                  >
-                    Go to verification page →
-                  </button>
-                </div>
-              )}
             </div>
           </div>
         )}
+        
+        {/* Error Display */}
+        {getErrorUI()}
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="space-y-4">
