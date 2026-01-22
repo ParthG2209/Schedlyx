@@ -1,5 +1,5 @@
 // src/pages/AuthCallback.tsx
-// FIXED: Validates profile setup completion, handles race conditions
+// FIXED: Removed direct DB queries, rely on Supabase auth state only
 
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -7,12 +7,13 @@ import { useAuthStore } from '../stores/authStore'
 import { supabase } from '../lib/supabase'
 
 /**
- * OAuth and Magic Link callback handler with validation
+ * SIMPLIFIED OAuth and Magic Link Callback Handler
  * 
  * FIXES:
- * - Validates profile setup completion
- * - Handles metadata propagation delays
- * - Provides clear error states
+ * - No direct profile table queries
+ * - Relies on Supabase auth session only
+ * - Profile creation handled by DB trigger
+ * - Clear error states without DB coupling
  */
 export function AuthCallback() {
   const navigate = useNavigate()
@@ -21,87 +22,91 @@ export function AuthCallback() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    if (loading) return
+    validateAuthCallback()
+  }, [])
 
-    // Wait for user to be set
-    if (!user) {
-      // No user after auth completed - something went wrong
-      const timer = setTimeout(() => {
-        setValidationState('error')
-        setErrorMessage('Authentication failed. Please try again.')
-      }, 3000)
-      
-      return () => clearTimeout(timer)
-    }
-
-    // User exists - validate profile setup
-    validateProfileSetup()
-  }, [loading, user, navigate])
-
-  async function validateProfileSetup() {
-    if (!user) return
-
+  async function validateAuthCallback() {
     try {
       setValidationState('checking')
 
-      // DEFENSIVE: Check if profile exists in database
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('id, email, first_name, last_name')
-        .eq('id', user.id)
-        .single()
+      // Check for auth hash in URL (OAuth callback)
+      const hashParams = new URLSearchParams(window.location.hash.substring(1))
+      const accessToken = hashParams.get('access_token')
+      const error = hashParams.get('error')
+      const errorDescription = hashParams.get('error_description')
 
+      // Handle OAuth errors
       if (error) {
-        // Profile doesn't exist or query failed
-        console.warn('[AuthCallback] Profile check failed:', error)
-        
-        // Wait a bit for profile creation trigger to complete
-        await new Promise(resolve => setTimeout(resolve, 2000))
-        
-        // Try again
-        const { data: retryProfile, error: retryError } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('id', user.id)
-          .single()
-
-        if (retryError) {
-          setValidationState('error')
-          setErrorMessage('Profile setup incomplete. Please contact support.')
-          return
-        }
+        setValidationState('error')
+        setErrorMessage(errorDescription || 'Authentication failed')
+        return
       }
 
-      // Profile exists - proceed
+      // If we have an access token in URL, Supabase will handle it
+      // Wait for auth state to update
+      if (accessToken) {
+        // Give Supabase client time to process the token
+        await new Promise(resolve => setTimeout(resolve, 1000))
+      }
+
+      // Check session state
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+
+      if (sessionError) {
+        setValidationState('error')
+        setErrorMessage('Failed to retrieve session')
+        return
+      }
+
+      if (!session) {
+        setValidationState('error')
+        setErrorMessage('No active session found')
+        return
+      }
+
+      // Session exists - auth successful
+      // Profile creation handled by database trigger
       setValidationState('valid')
       
-      // Small delay to ensure all metadata is propagated
+      // Small delay to ensure auth store updates
       await new Promise(resolve => setTimeout(resolve, 500))
       
+      // Redirect to dashboard
       navigate('/dashboard', { replace: true })
     } catch (error: any) {
       console.error('[AuthCallback] Validation error:', error)
       setValidationState('error')
-      setErrorMessage('An error occurred during sign in. Please try again.')
+      setErrorMessage('An unexpected error occurred during sign in')
     }
   }
 
-  // Show appropriate UI based on validation state
+  // Error state
   if (validationState === 'error') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
         <div className="max-w-md w-full text-center">
           <div className="mb-4">
-            <svg className="mx-auto h-12 w-12 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg 
+              className="mx-auto h-12 w-12 text-red-500" 
+              fill="none" 
+              viewBox="0 0 24 24" 
+              stroke="currentColor"
+            >
+              <path 
+                strokeLinecap="round" 
+                strokeLinejoin="round" 
+                strokeWidth={2} 
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" 
+              />
             </svg>
           </div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">
-            Sign In Error
+            Authentication Failed
           </h2>
           <p className="text-gray-600 mb-6">
             {errorMessage || 'Something went wrong during sign in.'}
           </p>
+          
           <div className="space-y-3">
             <button
               onClick={() => navigate('/login')}
@@ -116,11 +121,16 @@ export function AuthCallback() {
               Go Home
             </button>
           </div>
+
+          <p className="mt-6 text-xs text-gray-500">
+            If the problem persists, please contact support
+          </p>
         </div>
       </div>
     )
   }
 
+  // Loading state
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
