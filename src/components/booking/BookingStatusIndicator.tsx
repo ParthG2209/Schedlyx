@@ -1,6 +1,5 @@
 // src/components/booking/BookingStatusIndicators.tsx
-// Reusable status indicators and badges for booking states
-
+// FIXED: Added disclaimers for client-side availability indicators
 import { 
   CheckCircleIcon, 
   ClockIcon, 
@@ -8,7 +7,8 @@ import {
   ExclamationTriangleIcon,
   UserGroupIcon,
   LockClosedIcon,
-  BoltIcon
+  BoltIcon,
+  InformationCircleIcon
 } from '@heroicons/react/24/outline'
 
 interface CapacityBadgeProps {
@@ -16,13 +16,15 @@ interface CapacityBadgeProps {
   total: number
   size?: 'sm' | 'md' | 'lg'
   showPercentage?: boolean
+  showDisclaimer?: boolean // FIXED: Add disclaimer option
 }
 
 export function CapacityBadge({ 
   available, 
   total, 
   size = 'md',
-  showPercentage = false 
+  showPercentage = false,
+  showDisclaimer = false
 }: CapacityBadgeProps) {
   const percentage = (available / total) * 100
   
@@ -55,18 +57,27 @@ export function CapacityBadge({
   }
 
   return (
-    <span className={`
-      inline-flex items-center font-medium rounded-lg border
-      ${colors[level]} ${sizes[size]}
-    `}>
-      <UserGroupIcon className={`${iconSizes[size]} mr-1`} />
-      {available} / {total}
-      {showPercentage && (
-        <span className="ml-1 opacity-75">
-          ({Math.round(percentage)}%)
+    <div className="inline-flex flex-col items-start gap-1">
+      <span className={`
+        inline-flex items-center font-medium rounded-lg border
+        ${colors[level]} ${sizes[size]}
+      `}>
+        <UserGroupIcon className={`${iconSizes[size]} mr-1`} />
+        {available} / {total}
+        {showPercentage && (
+          <span className="ml-1 opacity-75">
+            ({Math.round(percentage)}%)
+          </span>
+        )}
+      </span>
+      {/* FIXED: Disclaimer for informational purposes */}
+      {showDisclaimer && (
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <InformationCircleIcon className="h-3 w-3" />
+          Availability shown is informational only
         </span>
       )}
-    </span>
+    </div>
   )
 }
 
@@ -165,34 +176,36 @@ interface AvailabilityIndicatorProps {
   level: 'high' | 'medium' | 'low' | 'full'
   size?: 'sm' | 'md'
   showIcon?: boolean
+  showDisclaimer?: boolean // FIXED: Add disclaimer option
 }
 
 export function AvailabilityIndicator({ 
   level, 
   size = 'md',
-  showIcon = true 
+  showIcon = true,
+  showDisclaimer = false
 }: AvailabilityIndicatorProps) {
   const config = {
     high: {
-      label: 'High Availability',
+      label: 'Many Slots Available',
       icon: CheckCircleIcon,
       colors: 'bg-green-50 text-green-700 border-green-200',
       pulse: false
     },
     medium: {
-      label: 'Limited Availability',
+      label: 'Some Slots Available',
       icon: ExclamationTriangleIcon,
       colors: 'bg-yellow-50 text-yellow-700 border-yellow-200',
       pulse: false
     },
     low: {
-      label: 'Almost Full',
+      label: 'Few Slots Remaining',
       icon: ExclamationTriangleIcon,
       colors: 'bg-orange-50 text-orange-700 border-orange-200',
       pulse: true
     },
     full: {
-      label: 'Fully Booked',
+      label: 'Currently Full',
       icon: XCircleIcon,
       colors: 'bg-gray-100 text-gray-600 border-gray-200',
       pulse: false
@@ -212,13 +225,22 @@ export function AvailabilityIndicator({
   }
 
   return (
-    <span className={`
-      inline-flex items-center font-medium rounded-lg border
-      ${colors} ${sizes[size]} ${pulse ? 'animate-pulse' : ''}
-    `}>
-      {showIcon && <Icon className={`${iconSizes[size]} mr-1.5`} />}
-      {label}
-    </span>
+    <div className="inline-flex flex-col items-start gap-1">
+      <span className={`
+        inline-flex items-center font-medium rounded-lg border
+        ${colors} ${sizes[size]} ${pulse ? 'animate-pulse' : ''}
+      `}>
+        {showIcon && <Icon className={`${iconSizes[size]} mr-1.5`} />}
+        {label}
+      </span>
+      {/* FIXED: Clear disclaimer about informational nature */}
+      {showDisclaimer && (
+        <span className="text-xs text-gray-500 flex items-center gap-1">
+          <InformationCircleIcon className="h-3 w-3" />
+          Shown for reference only - verify during booking
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -254,13 +276,15 @@ interface CapacityProgressBarProps {
   total: number
   showLabel?: boolean
   height?: 'sm' | 'md' | 'lg'
+  showDisclaimer?: boolean // FIXED: Add disclaimer option
 }
 
 export function CapacityProgressBar({ 
   available, 
   total, 
   showLabel = true,
-  height = 'md'
+  height = 'md',
+  showDisclaimer = false
 }: CapacityProgressBarProps) {
   const percentage = (available / total) * 100
   
@@ -291,6 +315,13 @@ export function CapacityProgressBar({
           style={{ width: `${percentage}%` }}
         />
       </div>
+      {/* FIXED: Disclaimer for progress bar */}
+      {showDisclaimer && (
+        <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+          <InformationCircleIcon className="h-3 w-3" />
+          Real-time availability confirmed during checkout
+        </p>
+      )}
     </div>
   )
 }

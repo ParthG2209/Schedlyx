@@ -1,6 +1,6 @@
 // src/components/booking/EnhancedBookingConfirmation.tsx
 // Enhanced confirmation screen with QR code and better UX
-// THIS FILE IS DEPRECATED AND NOT INTENDED TO USE
+
 import { useState } from 'react'
 import { 
   CheckCircleIcon, 
@@ -9,7 +9,6 @@ import {
   PrinterIcon,
   ShareIcon,
   ClockIcon,
-  MapPinIcon,
   UserIcon,
   DocumentDuplicateIcon
 } from '@heroicons/react/24/outline'
