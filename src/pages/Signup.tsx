@@ -1,5 +1,5 @@
 // src/pages/Signup.tsx
-// FIXED: Migration support, localStorage timestamp for recovery
+// FIXED: Removed localStorage auth markers, proper state-based flow
 
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
@@ -51,29 +51,26 @@ export function Signup() {
     }
 
     try {
-      // MIGRATION SUPPORT: Store signup timestamp for recovery
-      try {
-        localStorage.setItem('schedlyx_signup_timestamp', Date.now().toString())
-        localStorage.setItem('schedlyx_signup_email', formData.email)
-      } catch (err) {
-        // localStorage may be unavailable in some browsers
-        console.warn('[Signup] Could not save signup timestamp:', err)
-      }
-
       await signUp(formData.email, formData.password, {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        first_name: formData.firstName,
+        first_name: formData.firstName, // For compatibility
         last_name: formData.lastName
       })
       
-      // Always redirect to verification page after signup
+      // FIXED: No localStorage markers
+      // Auth store handles emailVerificationRequired state
+      // Redirect with explicit state
       navigate('/verify-email', { 
-        state: { email: formData.email },
+        state: { 
+          email: formData.email,
+          fromSignup: true // Explicit marker
+        },
         replace: true
       })
     } catch (error: any) {
-      console.error('Signup error:', error)
+      console.error('[Signup] Error:', error)
+      // Error already set by auth store
     }
   }
 
@@ -90,16 +87,11 @@ export function Signup() {
   const handleGoogleSignIn = async () => {
     clearError()
     try {
-      // MIGRATION SUPPORT: Mark as OAuth signup
-      try {
-        localStorage.setItem('schedlyx_oauth_signup', Date.now().toString())
-      } catch (err) {
-        console.warn('[Signup] Could not save OAuth timestamp:', err)
-      }
-      
+      // FIXED: No localStorage markers
       await signInWithGoogle()
+      // OAuth redirect handled by Supabase
     } catch (error: any) {
-      console.error('Google sign in error:', error)
+      console.error('[Signup] Google sign in error:', error)
     }
   }
 
@@ -122,7 +114,7 @@ export function Signup() {
         
         {/* Error Message */}
         {displayError && (
-          <div className="rounded-md bg-red-50 p-4">
+          <div className="rounded-md bg-red-50 border border-red-200 p-4">
             <div className="flex">
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-red-800">
@@ -130,11 +122,6 @@ export function Signup() {
                 </h3>
                 <div className="mt-2 text-sm text-red-700">
                   <p>{displayError}</p>
-                  {error?.retryable && (
-                    <p className="mt-2 text-xs">
-                      This error is retryable. Please try again.
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
