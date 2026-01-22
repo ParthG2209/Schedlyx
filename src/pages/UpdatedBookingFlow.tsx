@@ -1,10 +1,10 @@
 // src/pages/UpdatedBookingFlowPage.tsx
-// REWRITTEN: Atomic flow with strict error handling
-
-import { useEffect } from 'react'
+// FIXED: Replaced window.location with navigate(), added health check enforcement
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { ArrowLeftIcon } from '@heroicons/react/24/outline'
 import { useBookingStore } from '../stores/bookingStore'
+import { BookingSystemGuard } from '../lib/guards/bookingSystemGuard'
 import { EnhancedSlotSelector } from '../components/booking/EnhancedSlotSelector'
 import { EnhancedBookingForm } from '../components/booking/EnhancedBookingForm'
 import { EnhancedBookingConfirmation } from '../components/booking/EnhancedBookingConfirmation'
@@ -14,6 +14,8 @@ import { BookingErrorType } from '../lib/services/bookingService'
 export function UpdatedBookingFlowPage() {
   const { eventId } = useParams<{ eventId: string }>()
   const navigate = useNavigate()
+  const [systemHealthy, setSystemHealthy] = useState<boolean | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
 
   const {
     currentStep,
@@ -33,6 +35,25 @@ export function UpdatedBookingFlowPage() {
     clearError
   } = useBookingStore()
 
+  // FIXED: Enforce booking system health check before rendering
+  useEffect(() => {
+    async function checkHealth() {
+      try {
+        const health = await BookingSystemGuard.checkBookingSystemHealth()
+        setSystemHealthy(health.isHealthy)
+        
+        if (!health.isHealthy) {
+          setHealthError(health.error || 'Booking system unavailable')
+        }
+      } catch (err: any) {
+        setSystemHealthy(false)
+        setHealthError('Failed to verify booking system status')
+      }
+    }
+    
+    checkHealth()
+  }, [])
+
   useEffect(() => {
     if (!eventId) {
       console.error('BookingFlowPage: No eventId provided')
@@ -46,26 +67,22 @@ export function UpdatedBookingFlowPage() {
     }
   }, [eventId, navigate])
 
-  // FIXED: Atomic slot selection - pass through directly to store
   const handleSelectSlot = async (slot: any, quantity: number) => {
-    clearError() // Clear any previous errors
+    clearError()
     await selectSlot(slot, quantity)
   }
 
-  // FIXED: Atomic booking confirmation
   const handleConfirmBooking = async () => {
-    clearError() // Clear any previous errors
+    clearError()
     await confirmBooking()
   }
 
-  // FIXED: Handle cancellation with confirmation
   const handleCancelBooking = () => {
     if (confirm('Are you sure you want to cancel this booking? Your slot reservation will be released.')) {
       cancelBooking()
     }
   }
 
-  // FIXED: Handle back navigation
   const handleBack = () => {
     if (currentStep === 'fill-details') {
       if (confirm('Going back will release your slot reservation. Continue?')) {
@@ -76,24 +93,28 @@ export function UpdatedBookingFlowPage() {
     }
   }
 
-  // FIXED: Handle close after completion
   const handleClose = () => {
     resetBooking()
     navigate(`/event/${eventId}`)
   }
 
-  // FIXED: Handle error retry
-  const handleErrorRetry = () => {
+  // FIXED: Replaced window.location.reload() with state refetch
+  const handleErrorRetry = async () => {
     clearError()
-    // For RPC errors, try reloading slots
+    
     if (errorType === BookingErrorType.RPC_UNAVAILABLE) {
-      window.location.reload()
+      // Re-check system health instead of reloading
+      const health = await BookingSystemGuard.checkBookingSystemHealth()
+      setSystemHealthy(health.isHealthy)
+      
+      if (!health.isHealthy) {
+        setHealthError(health.error || 'Booking system still unavailable')
+      }
     }
   }
 
-  // FIXED: Handle error reset
   const handleErrorReset = () => {
-    cancelBooking() // This will reset to select-slot step
+    cancelBooking()
     clearError()
   }
 
@@ -115,7 +136,66 @@ export function UpdatedBookingFlowPage() {
     }
   }
 
-  // FIXED: Validate event ID
+  // FIXED: Show system health error instead of invalid event
+  if (systemHealthy === false) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+          <div className="flex items-start mb-4">
+            <div className="flex-shrink-0">
+              <svg className="h-6 w-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+            </div>
+            <div className="ml-3 flex-1">
+              <h3 className="text-lg font-medium text-red-800 mb-2">
+                Booking System Unavailable
+              </h3>
+              <p className="text-red-700 mb-4">
+                {healthError}
+              </p>
+              <p className="text-sm text-red-600 mb-4">
+                The booking system database functions are not installed. This is likely a deployment issue.
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    const health = await BookingSystemGuard.checkBookingSystemHealth()
+                    setSystemHealthy(health.isHealthy)
+                    if (!health.isHealthy) {
+                      setHealthError(health.error || 'Still unavailable')
+                    }
+                  }}
+                  className="btn-primary"
+                >
+                  Retry
+                </button>
+                <button
+                  onClick={() => navigate('/')}
+                  className="btn-secondary"
+                >
+                  Go Home
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show loading while checking health
+  if (systemHealthy === null) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="text-center">
+          <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mb-4"></div>
+          <p className="text-gray-600">Checking booking system availability...</p>
+        </div>
+      </div>
+    )
+  }
+
   if (!eventId) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-8">
@@ -159,7 +239,6 @@ export function UpdatedBookingFlowPage() {
             {/* Progress Steps */}
             {currentStep !== 'completed' && (
               <div className="hidden md:flex items-center space-x-2">
-                {/* Step 1 */}
                 <div className="flex items-center">
                   <div className={`
                     h-10 w-10 rounded-full flex items-center justify-center font-semibold text-sm
@@ -178,10 +257,8 @@ export function UpdatedBookingFlowPage() {
                   </span>
                 </div>
 
-                {/* Connector */}
                 <div className="h-0.5 w-12 bg-gray-300 mx-2"></div>
 
-                {/* Step 2 */}
                 <div className="flex items-center">
                   <div className={`
                     h-10 w-10 rounded-full flex items-center justify-center font-semibold text-sm
@@ -204,7 +281,7 @@ export function UpdatedBookingFlowPage() {
           </div>
         </div>
 
-        {/* FIXED: Error Display with specific handling */}
+        {/* Error Display */}
         {error && errorType && (
           <div className="mb-6">
             <BookingErrorHandler
@@ -237,7 +314,6 @@ export function UpdatedBookingFlowPage() {
         {/* Main Content */}
         <div className="bg-white rounded-xl shadow-xl overflow-hidden border border-gray-200">
           <div className="p-6 md:p-8">
-            {/* Step 1: Select Slot */}
             {currentStep === 'select-slot' && (
               <EnhancedSlotSelector
                 eventId={eventId}
@@ -246,7 +322,6 @@ export function UpdatedBookingFlowPage() {
               />
             )}
 
-            {/* Step 2: Fill Details */}
             {currentStep === 'fill-details' && selectedSlot && (
               <EnhancedBookingForm
                 selectedSlot={selectedSlot}
@@ -260,7 +335,6 @@ export function UpdatedBookingFlowPage() {
               />
             )}
 
-            {/* Step 3: Confirmation */}
             {currentStep === 'completed' && booking && (
               <EnhancedBookingConfirmation
                 booking={booking}
