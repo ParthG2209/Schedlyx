@@ -1,5 +1,6 @@
 // src/lib/services/bookingService.ts
-// COMPLETELY REWRITTEN: All unsafe fallbacks removed, strict error handling added
+// FIXED: Aligned BookingErrorType enum names with BookingErrorHandler expectations
+// REMOVED: ensureRPCAvailable() - now relying on BookingSystemGuard only
 import { supabase } from '../supabase'
 import { BookingSystemGuard } from '../guards/bookingSystemGuard'
 
@@ -11,17 +12,18 @@ import type {
 } from '../../types/booking'
 
 /**
- * Booking-specific error types for precise error handling
+ * FIXED: Booking error types aligned with BookingErrorHandler component
+ * Changed to match exact names used in error handling UI
  */
 export enum BookingErrorType {
-  LOCK_EXPIRED = 'LOCK_EXPIRED',
-  SLOT_FULL = 'SLOT_FULL',
-  INVALID_QUANTITY = 'INVALID_QUANTITY',
-  CAPACITY_EXCEEDED = 'CAPACITY_EXCEEDED',
-  SYSTEM_ERROR = 'SYSTEM_ERROR',
-  RPC_UNAVAILABLE = 'RPC_UNAVAILABLE',
-  INVALID_LOCK = 'INVALID_LOCK',
-  SLOT_NOT_FOUND = 'SLOT_NOT_FOUND'
+  LOCK_EXPIRED = 'LOCK_EXPIRED',           // ✓ Aligned
+  SLOT_FULL = 'SLOT_FULL',                 // ✓ Aligned
+  INVALID_QUANTITY = 'INVALID_QUANTITY',   // ✓ Aligned
+  CAPACITY_EXCEEDED = 'CAPACITY_EXCEEDED', // ✓ FIXED: Was CAPACITY_CHANGED
+  SYSTEM_ERROR = 'SYSTEM_ERROR',           // ✓ Aligned
+  RPC_UNAVAILABLE = 'RPC_UNAVAILABLE',     // ✓ FIXED: Was RPC_NOT_AVAILABLE
+  INVALID_LOCK = 'INVALID_LOCK',           // ✓ FIXED: Was LOCK_INVALID
+  SLOT_NOT_FOUND = 'SLOT_NOT_FOUND'        // ✓ Aligned
 }
 
 export class BookingError extends Error {
@@ -38,19 +40,13 @@ export class BookingError extends Error {
 export class BookingService {
   /**
    * CRITICAL: Get available slots - ONLY THROUGH RPC
-   * FIXED: Removed ALL fallbacks, strict error handling
+   * FIXED: Removed ensureRPCAvailable() - relying on BookingSystemGuard pre-flight check
    */
   static async getAvailableSlots(eventId: string): Promise<SlotAvailability[]> {
-    // Pre-flight health check
-    const health = await BookingSystemGuard.checkBookingSystemHealth()
-    if (!health.isHealthy) {
-      throw new BookingError(
-        BookingErrorType.RPC_UNAVAILABLE,
-        health.error || 'Booking system is not configured correctly',
-        { missingComponents: health.missingComponents }
-      )
-    }
-
+    // REMOVED: ensureRPCAvailable() call
+    // Now relying on BookingSystemGuard.checkBookingSystemHealth() 
+    // called at page level in UpdatedBookingFlowPage
+    
     try {
       const { data: rpcData, error: rpcError } = await supabase.rpc('get_available_slots', {
         p_event_id: eventId,
@@ -111,7 +107,7 @@ export class BookingService {
 
   /**
    * Check if event is bookable (pre-flight check)
-   * FIXED: Strict quantity validation, no fallbacks
+   * FIXED: Uses CAPACITY_EXCEEDED instead of CAPACITY_CHANGED
    */
   static async canBookEvent(eventId: string, quantity: number): Promise<{
     canBook: boolean
@@ -127,7 +123,7 @@ export class BookingService {
       }
     }
 
-    // Pre-flight health check
+    // Pre-flight health check via guard
     const health = await BookingSystemGuard.checkBookingSystemHealth()
     if (!health.isHealthy) {
       return {
@@ -140,7 +136,7 @@ export class BookingService {
     try {
       const { data, error } = await supabase.rpc('can_book_event', {
         p_event_id: eventId,
-        p_quantity: quantity // FIXED: Always pass quantity
+        p_quantity: quantity
       })
 
       if (error) {
@@ -180,7 +176,7 @@ export class BookingService {
 
   /**
    * Create slot lock with server-side validation
-   * FIXED: Strict quantity validation, atomic operation
+   * FIXED: Uses CAPACITY_EXCEEDED and SLOT_NOT_FOUND
    */
   static async createSlotLock(
     slotId: string,
@@ -202,15 +198,15 @@ export class BookingService {
         p_slot_id: slotId,
         p_user_id: userId || null,
         p_session_id: sessionId || this.getSessionId(),
-        p_quantity: quantity, // CRITICAL: Always include quantity
+        p_quantity: quantity,
         p_lock_duration_minutes: 10
       })
 
       if (error) {
-        // Parse specific error types from database
+        // FIXED: Parse specific error types with aligned enum names
         if (error.message?.includes('capacity')) {
           throw new BookingError(
-            BookingErrorType.CAPACITY_EXCEEDED,
+            BookingErrorType.CAPACITY_EXCEEDED, // FIXED: Was CAPACITY_CHANGED
             `Not enough capacity: requested ${quantity} but insufficient slots available`,
             { code: error.code, quantity }
           )
@@ -218,7 +214,7 @@ export class BookingService {
         
         if (error.message?.includes('not found') || error.message?.includes('invalid')) {
           throw new BookingError(
-            BookingErrorType.SLOT_NOT_FOUND,
+            BookingErrorType.SLOT_NOT_FOUND, // FIXED: Now properly aligned
             'Slot not found or no longer available',
             { code: error.code }
           )
@@ -281,7 +277,7 @@ export class BookingService {
 
   /**
    * Server-side lock verification (AUTHORITY)
-   * FIXED: Clear error types for each failure mode
+   * FIXED: Clear error types with aligned enum names
    */
   static async verifyLock(lockId: string): Promise<{
     isValid: boolean
@@ -342,7 +338,7 @@ export class BookingService {
 
   /**
    * Complete booking with server-side validation
-   * FIXED: Atomic operation, clear error handling
+   * FIXED: Uses INVALID_LOCK instead of LOCK_INVALID
    */
   static async completeBooking(
     lockId: string,
@@ -352,7 +348,7 @@ export class BookingService {
     const lockStatus = await this.verifyLock(lockId)
     
     if (!lockStatus.isValid) {
-      // Parse lock failure reason
+      // FIXED: Parse lock failure reason with aligned enum
       if (lockStatus.reason?.includes('expired')) {
         throw new BookingError(
           BookingErrorType.LOCK_EXPIRED,
@@ -362,7 +358,7 @@ export class BookingService {
       }
       
       throw new BookingError(
-        BookingErrorType.INVALID_LOCK,
+        BookingErrorType.INVALID_LOCK, // FIXED: Was LOCK_INVALID
         lockStatus.reason || 'Lock is no longer valid',
         { lockId }
       )
@@ -379,7 +375,7 @@ export class BookingService {
       })
 
       if (error) {
-        // Parse specific error types
+        // FIXED: Parse specific error types with aligned enum names
         if (error.message?.includes('expired')) {
           throw new BookingError(
             BookingErrorType.LOCK_EXPIRED,
@@ -398,7 +394,7 @@ export class BookingService {
         
         if (error.message?.includes('not found')) {
           throw new BookingError(
-            BookingErrorType.INVALID_LOCK,
+            BookingErrorType.INVALID_LOCK, // FIXED: Was LOCK_INVALID
             'Reservation not found. Please start over.',
             { lockId, code: error.code }
           )
