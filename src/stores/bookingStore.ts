@@ -1,5 +1,5 @@
 // src/stores/bookingStore.ts
-// FIXED: Timer now verifies with server before showing expiration error
+// UPDATED: Uses aligned BookingErrorType enum values
 import { create } from 'zustand'
 import { BookingService, BookingError, BookingErrorType } from '../lib/services/bookingService'
 import type { 
@@ -22,7 +22,7 @@ interface BookingState {
   errorType: BookingErrorType | null
   loading: boolean
   timeRemaining: number
-  verifyingLock: boolean // FIXED: Track verification state
+  verifyingLock: boolean
 }
 
 interface BookingStore extends BookingState {
@@ -73,7 +73,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       if (quantity > slot.availableCount) {
         set({
           error: `Only ${slot.availableCount} slot${slot.availableCount === 1 ? '' : 's'} available, but ${quantity} requested`,
-          errorType: BookingErrorType.CAPACITY_EXCEEDED,
+          errorType: BookingErrorType.CAPACITY_EXCEEDED, // ✓ ALIGNED
           loading: false
         })
         return
@@ -102,7 +102,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           clearInterval(timerIntervalId)
         }
         
-        // FIXED: Timer now verifies with server when expired
+        // Timer with server verification
         timerIntervalId = setInterval(async () => {
           const state = get()
           if (state.lockExpiresAt) {
@@ -110,37 +110,33 @@ export const useBookingStore = create<BookingStore>((set, get) => {
             
             set({ timeRemaining: remaining })
             
-            // FIXED: When timer hits zero, verify with server instead of auto-expiring
+            // When timer hits zero, verify with server
             if (remaining <= 0 && !state.verifyingLock) {
               if (timerIntervalId) {
                 clearInterval(timerIntervalId)
                 timerIntervalId = null
               }
               
-              // Set verifying state
               set({ verifyingLock: true })
               
               try {
-                // Verify with server
                 const lockStatus = await BookingService.verifyLock(state.lockId!)
                 
                 if (!lockStatus.isValid) {
                   // Server confirmed expiration
                   set({
                     error: 'Your reservation has expired. Please select a new slot.',
-                    errorType: BookingErrorType.LOCK_EXPIRED,
+                    errorType: BookingErrorType.LOCK_EXPIRED, // ✓ ALIGNED
                     verifyingLock: false
                   })
                 } else {
-                  // Lock is still valid (clock skew or other issue)
-                  // Update expiry time from server
+                  // Lock still valid - update from server
                   set({
                     lockExpiresAt: lockStatus.expiresAt,
                     timeRemaining: BookingService.getTimeRemaining(lockStatus.expiresAt!),
                     verifyingLock: false
                   })
                   
-                  // Restart timer if lock extended
                   if (lockStatus.expiresAt) {
                     timerIntervalId = setInterval(() => {
                       const currentRemaining = BookingService.getTimeRemaining(lockStatus.expiresAt!)
@@ -149,7 +145,6 @@ export const useBookingStore = create<BookingStore>((set, get) => {
                   }
                 }
               } catch (error) {
-                // Error verifying - assume expired
                 set({
                   error: 'Unable to verify reservation status. Please try again.',
                   errorType: BookingErrorType.SYSTEM_ERROR,
@@ -195,7 +190,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       if (!lockId) {
         set({ 
           error: 'No active reservation found. Please select a slot.',
-          errorType: BookingErrorType.INVALID_LOCK
+          errorType: BookingErrorType.INVALID_LOCK // ✓ ALIGNED (was LOCK_INVALID)
         })
         return
       }
@@ -244,11 +239,12 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           errorMessage = error.message
           errorType = error.type
           
+          // FIXED: Check for aligned enum values
           if (
             errorType === BookingErrorType.LOCK_EXPIRED ||
             errorType === BookingErrorType.SLOT_FULL ||
-            errorType === BookingErrorType.INVALID_LOCK ||
-            errorType === BookingErrorType.CAPACITY_EXCEEDED
+            errorType === BookingErrorType.INVALID_LOCK || // ✓ ALIGNED (was LOCK_INVALID)
+            errorType === BookingErrorType.CAPACITY_EXCEEDED // ✓ ALIGNED (was CAPACITY_CHANGED)
           ) {
             shouldReset = true
           }
