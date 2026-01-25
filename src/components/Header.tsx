@@ -1,5 +1,5 @@
 import { Link, useNavigate } from 'react-router-dom'
-import { CalendarIcon, UserCircleIcon } from '@heroicons/react/24/outline'
+import { UserCircleIcon } from '@heroicons/react/24/outline'
 import { useAuth } from '../hooks/useAuth'
 import { useState } from 'react'
 
@@ -22,9 +22,13 @@ export function Header() {
     <header className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
-          <Link to="/" className="flex items-center space-x-2">
-            <CalendarIcon className="h-8 w-8 text-primary-600" />
-            <span className="text-xl font-bold text-gray-900">Schedlyx</span>
+          <Link to="/" className="flex items-center space-x-3">
+            <img 
+              src="/images/Schedlyx Logo Design.svg" 
+              alt="Schedlyx Logo" 
+              className="h-10 w-auto" 
+            />
+            <span className="hidden sm:block text-xl font-bold text-gray-900">Schedlyx</span>
           </Link>
           
           {isAuthenticated && (
