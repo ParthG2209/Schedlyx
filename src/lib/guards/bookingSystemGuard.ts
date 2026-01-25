@@ -1,8 +1,26 @@
 // src/lib/guards/bookingSystemGuard.ts
-// FIXED: Added missing supabase import
-
+// UPDATED: Added documentation explaining defense-in-depth approach
+// DESIGN DECISION: Keep this guard at page level, BookingService relies on it
 import { supabase } from '../supabase'
 
+/**
+ * BookingSystemGuard - Page-level RPC availability check
+ * 
+ * DESIGN DECISION: Defense-in-depth approach
+ * - This guard runs ONCE at page load (with caching)
+ * - BookingService methods rely on this pre-flight check
+ * - This prevents unnecessary RPC calls if system is unavailable
+ * 
+ * WHY NOT IN BookingService?
+ * - Page-level check happens before ANY booking operations
+ * - Allows UI to show helpful error message immediately
+ * - Prevents user from entering booking flow if system is down
+ * - Service-level checks would be too late (user already selected slot)
+ * 
+ * CACHING:
+ * - Results cached for 1 minute to prevent repeated checks
+ * - Invalidate cache manually after running migrations
+ */
 export class BookingSystemGuard {
   private static healthCheckCache: {
     isHealthy: boolean
@@ -15,6 +33,8 @@ export class BookingSystemGuard {
   /**
    * Check if the booking system RPC functions are available
    * This prevents the app from attempting bookings when migrations haven't run
+   * 
+   * USAGE: Call this in UpdatedBookingFlowPage before rendering booking UI
    */
   static async checkBookingSystemHealth(): Promise<{
     isHealthy: boolean
@@ -93,6 +113,11 @@ export class BookingSystemGuard {
   /**
    * Invalidate the health check cache
    * Call this after running migrations or when you want to force a recheck
+   * 
+   * USAGE: 
+   * - After deploying new migrations
+   * - In development when testing RPC functions
+   * - When user clicks "Retry" after migration instructions
    */
   static invalidateCache() {
     this.healthCheckCache = null
