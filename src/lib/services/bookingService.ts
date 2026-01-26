@@ -1,9 +1,8 @@
 // src/lib/services/bookingService.ts
 // CRITICAL FIXES APPLIED:
-// 1. Runtime RPC availability guard with clear error messaging
-// 2. Client-side quantity validation before server calls
-// 3. Separated admin functions into dedicated namespace
-// 4. Added comprehensive documentation of invariants
+// 1. Removed availableCount parameter from createSlotLock (server is authority)
+// 2. Separated error types for better clarity
+// 3. Removed client-side capacity validation from service layer
 
 import { supabase } from '../supabase'
 import {
@@ -51,12 +50,14 @@ import {
 
 /**
  * Specific error types for better error handling
+ * FIX #6: Separated error semantics
  */
 export enum BookingErrorType {
   LOCK_EXPIRED = 'LOCK_EXPIRED',
   SLOT_FULL = 'SLOT_FULL',
-  INVALID_QUANTITY = 'INVALID_QUANTITY',
+  CAPACITY_EXCEEDED = 'CAPACITY_EXCEEDED',
   CAPACITY_CHANGED = 'CAPACITY_CHANGED',
+  INVALID_QUANTITY = 'INVALID_QUANTITY',
   RPC_NOT_AVAILABLE = 'RPC_NOT_AVAILABLE',
   LOCK_INVALID = 'LOCK_INVALID',
   SYSTEM_ERROR = 'SYSTEM_ERROR',
@@ -77,8 +78,6 @@ export class BookingError extends Error {
 /**
  * Runtime check for RPC availability
  * CRITICAL: Prevents silent failures when backend is not deployed
- * 
- * FIX #1: Added comprehensive boot-time guard
  */
 async function checkRPCAvailability(): Promise<void> {
   const requiredRPCs = [
@@ -90,13 +89,11 @@ async function checkRPCAvailability(): Promise<void> {
   ]
 
   try {
-    // Test get_available_slots - will fail fast if RPC doesn't exist
     const { error } = await supabase.rpc('get_available_slots', {
       p_event_id: '00000000-0000-0000-0000-000000000000',
       p_session_id: 'test'
     })
     
-    // PGRST202 = function not found
     if (error && error.code === 'PGRST202') {
       throw new BookingError(
         BookingErrorType.RPC_NOT_AVAILABLE,
@@ -116,7 +113,6 @@ async function checkRPCAvailability(): Promise<void> {
       throw error
     }
     
-    // Network or other system errors
     console.error('RPC availability check failed:', error)
     throw new BookingError(
       BookingErrorType.BACKEND_NOT_INITIALIZED,
@@ -138,8 +134,7 @@ export class BookingService {
   private static rpcChecked = false
 
   /**
-   * FIX #1: Runtime guard - ensures RPCs exist before any booking operation
-   * Throws clear error if backend is not initialized
+   * Runtime guard - ensures RPCs exist before any booking operation
    */
   private static async ensureRPCAvailable(): Promise<void> {
     if (this.rpcChecked) return
@@ -198,7 +193,6 @@ export class BookingService {
    * @throws BookingError with specific type if operation fails
    */
   static async getAvailableSlots(eventId: string, sessionId?: string): Promise<SlotAvailability[]> {
-    // FIX #1: Check RPC availability first with clear error
     await this.ensureRPCAvailable()
     
     try {
@@ -269,7 +263,6 @@ export class BookingService {
     reason: string | null
     availableSlots: number
   }> {
-    // Validate quantity before calling RPC
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BookingError(
         BookingErrorType.INVALID_QUANTITY,
@@ -324,11 +317,11 @@ export class BookingService {
   }
 
   /**
-   * FIX #3: Create slot lock with client-side validation
+   * FIX #1: Create slot lock WITHOUT client-side capacity validation
+   * Server is the ONLY authority on availability
    * 
    * @param slotId - Slot UUID
-   * @param quantity - Number of seats to lock (REQUIRED, VALIDATED)
-   * @param availableCount - Current available count for client-side validation
+   * @param quantity - Number of seats to lock (REQUIRED, VALIDATED by server)
    * @param sessionId - Optional browser session ID
    * @param userId - Optional authenticated user ID
    * @returns Lock ID and server-calculated expiry time
@@ -337,28 +330,17 @@ export class BookingService {
   static async createSlotLock(
     slotId: string,
     quantity: number,
-    availableCount: number, // FIX #3: Required for client validation
     sessionId?: string,
     userId?: string
   ): Promise<{ lockId: string; expiresAt: string }> {
     await this.ensureRPCAvailable()
     
-    // FIX #3: Client-side validation BEFORE server call
+    // Basic validation only - server does capacity check
     if (!Number.isInteger(quantity) || quantity <= 0) {
       throw new BookingError(
         BookingErrorType.INVALID_QUANTITY,
         `Invalid quantity: ${quantity}. Must be a positive integer.`,
         { quantity }
-      )
-    }
-
-    // FIX #3: Check against available count
-    if (quantity > availableCount) {
-      throw new BookingError(
-        BookingErrorType.SLOT_FULL,
-        `Only ${availableCount} seat${availableCount === 1 ? '' : 's'} available. ` +
-        `You selected ${quantity}.`,
-        { quantity, availableCount }
       )
     }
 
@@ -376,18 +358,23 @@ export class BookingService {
         
         const errorMsg = error.message.toLowerCase()
         
-        if (errorMsg.includes('insufficient') || errorMsg.includes('capacity')) {
+        // FIX #6: Better error type separation
+        if (errorMsg.includes('insufficient capacity')) {
+          const match = errorMsg.match(/available:\s*(\d+)/)
+          const available = match ? parseInt(match[1]) : 0
+          
           throw new BookingError(
-            BookingErrorType.SLOT_FULL,
+            BookingErrorType.CAPACITY_EXCEEDED,
             `Unable to reserve ${quantity} seat${quantity === 1 ? '' : 's'}. ` +
-            `Another user may have just booked this slot. Please select a different time.`,
-            { slotId, requestedQuantity: quantity }
+            `Only ${available} seat${available === 1 ? '' : 's'} available. ` +
+            `Another user may have just booked this slot.`,
+            { slotId, requestedQuantity: quantity, available }
           )
         }
         
         if (errorMsg.includes('not available') || errorMsg.includes('not found')) {
           throw new BookingError(
-            BookingErrorType.CAPACITY_CHANGED,
+            BookingErrorType.SLOT_FULL,
             'Slot is no longer available. Please select a different time.',
             { slotId }
           )
@@ -492,6 +479,9 @@ export class BookingService {
   /**
    * Release slot lock via RPC
    * Used for explicit cancellation or cleanup
+   * 
+   * FIX #5: Returns success boolean, errors are logged but not thrown
+   * This is "best effort" cleanup - server will expire locks anyway
    */
   static async releaseSlotLock(lockId: string): Promise<boolean> {
     try {
@@ -549,10 +539,18 @@ export class BookingService {
           )
         }
         
-        if (errorMsg.includes('capacity') || errorMsg.includes('insufficient')) {
+        if (errorMsg.includes('capacity') && errorMsg.includes('changed')) {
           throw new BookingError(
             BookingErrorType.CAPACITY_CHANGED,
             'Slot capacity has changed. Please select a different time.',
+            { lockId }
+          )
+        }
+        
+        if (errorMsg.includes('insufficient')) {
+          throw new BookingError(
+            BookingErrorType.CAPACITY_EXCEEDED,
+            'Not enough seats available. The slot may have been booked by another user.',
             { lockId }
           )
         }
@@ -649,21 +647,13 @@ export class BookingService {
  * ADMIN BOOKING SERVICE - FOR MANAGEMENT UI ONLY
  * =============================================================================
  * 
- * FIX #2: Separated admin functions into dedicated namespace
- * 
  * WARNING: These functions are for ADMIN interfaces only
  * NEVER call these from customer-facing booking flows
  * NEVER use these for availability checks
- * 
- * These functions bypass the RPC layer for admin convenience
- * but must NEVER be used in booking logic
  */
 export class BookingAdminService {
   /**
    * ADMIN ONLY: Generate event slots
-   * 
-   * WARNING: This is for bulk slot creation only
-   * DO NOT use for availability checks
    */
   static async generateEventSlots(
     eventId: string,
@@ -691,13 +681,6 @@ export class BookingAdminService {
    * 
    * WARNING: This is for ADMIN dashboard display only
    * NEVER use this for customer-facing availability checks
-   * 
-   * Why? This query:
-   * - Doesn't account for active locks
-   * - May show stale data
-   * - Bypasses booking atomicity guarantees
-   * 
-   * For customer availability, ALWAYS use BookingService.getAvailableSlots()
    */
   static async getEventSlots(eventId: string): Promise<TimeSlot[]> {
     try {
@@ -732,7 +715,6 @@ export class BookingAdminService {
 
   /**
    * ADMIN ONLY: Get all bookings for an event
-   * For admin dashboard and management only
    */
   static async getEventBookings(eventId: string) {
     try {
@@ -751,7 +733,6 @@ export class BookingAdminService {
 
   /**
    * ADMIN ONLY: Get active locks for monitoring
-   * For debugging and admin dashboard only
    */
   static async getActiveLocks(eventId?: string) {
     try {
