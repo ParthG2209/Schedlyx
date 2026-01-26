@@ -1,10 +1,12 @@
 // src/App.tsx
-// FIXED: Added BookingErrorBoundary wrapper for booking route
+// FIXED: Removed duplicate /book/:eventId routes
+// FIXED: Added feature flag gating for booking routes
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { EmailVerificationGuard } from './components/EmailVerificationGuard'
 import { BookingErrorBoundary } from './components/booking/BookingErrorBoundary'
+import { featureFlags } from './lib/featureFlags'
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
@@ -16,6 +18,7 @@ import { PublicEventPage } from './pages/PublicEventPage'
 import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
 import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
+import { BookingPage } from './pages/BookingPage'
 
 function App() {
   return (
@@ -29,17 +32,24 @@ function App() {
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/events" element={<EventsList />} />
         
-        {/* FIXED: Booking route now wrapped with error boundary */}
-        <Route 
-          path="/book/:eventId" 
-          element={
-            <BookingErrorBoundary>
-              <UpdatedBookingFlowPage />
-            </BookingErrorBoundary>
-          } 
-        />
+        {/* FIXED: Feature-flagged booking route - only ONE route registered */}
+        {featureFlags.ENABLE_NEW_BOOKING_FLOW ? (
+          <Route 
+            path="/book/:eventId" 
+            element={
+              <BookingErrorBoundary>
+                <UpdatedBookingFlowPage />
+              </BookingErrorBoundary>
+            } 
+          />
+        ) : (
+          <Route 
+            path="/book/:eventId" 
+            element={<BookingPage />} 
+          />
+        )}
         
-        {/* Email Verification Route - needs guard to prevent direct access */}
+        {/* Email Verification Route */}
         <Route 
           path="/verify-email" 
           element={
