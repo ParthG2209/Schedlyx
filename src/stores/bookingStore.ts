@@ -1,5 +1,7 @@
 // src/stores/bookingStore.ts
-// UPDATED: Uses aligned BookingErrorType enum values
+// CORRECTED: Aligned with branch6 BookingService API
+// - createSlotLock now requires availableCount parameter
+// - Uses correct BookingErrorType enum values
 import { create } from 'zustand'
 import { BookingService, BookingError, BookingErrorType } from '../lib/services/bookingService'
 import type { 
@@ -61,6 +63,9 @@ export const useBookingStore = create<BookingStore>((set, get) => {
     verifyingLock: false,
 
     selectSlot: async (slot: SlotAvailability, quantity: number) => {
+      // CLIENT-SIDE VALIDATION (UX ONLY - NOT AUTHORITATIVE)
+      // BookingService (branch6) is the final authority
+      
       if (!Number.isInteger(quantity) || quantity < 1) {
         set({
           error: 'Invalid quantity: must be a positive integer',
@@ -70,10 +75,11 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         return
       }
 
+      // UX optimization - don't send request if we know it will fail
       if (quantity > slot.availableCount) {
         set({
-          error: `Only ${slot.availableCount} slot${slot.availableCount === 1 ? '' : 's'} available, but ${quantity} requested`,
-          errorType: BookingErrorType.CAPACITY_EXCEEDED, // ✓ ALIGNED
+          error: `Only ${slot.availableCount} slot${slot.availableCount === 1 ? '' : 's'} available`,
+          errorType: BookingErrorType.CAPACITY_CHANGED, // CORRECTED: Using branch6 enum
           loading: false
         })
         return
@@ -82,9 +88,11 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       set({ loading: true, error: null, errorType: null })
       
       try {
+        // CORRECTED: Branch6 requires availableCount parameter
         const { lockId, expiresAt } = await BookingService.createSlotLock(
           slot.slotId, 
-          quantity
+          quantity,
+          slot.availableCount // CORRECTED: Added required parameter
         )
         
         set({
@@ -102,7 +110,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           clearInterval(timerIntervalId)
         }
         
-        // Timer with server verification
+        // Timer with server verification at expiry
         timerIntervalId = setInterval(async () => {
           const state = get()
           if (state.lockExpiresAt) {
@@ -123,14 +131,12 @@ export const useBookingStore = create<BookingStore>((set, get) => {
                 const lockStatus = await BookingService.verifyLock(state.lockId!)
                 
                 if (!lockStatus.isValid) {
-                  // Server confirmed expiration
                   set({
                     error: 'Your reservation has expired. Please select a new slot.',
-                    errorType: BookingErrorType.LOCK_EXPIRED, // ✓ ALIGNED
+                    errorType: BookingErrorType.LOCK_EXPIRED,
                     verifyingLock: false
                   })
                 } else {
-                  // Lock still valid - update from server
                   set({
                     lockExpiresAt: lockStatus.expiresAt,
                     timeRemaining: BookingService.getTimeRemaining(lockStatus.expiresAt!),
@@ -190,7 +196,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
       if (!lockId) {
         set({ 
           error: 'No active reservation found. Please select a slot.',
-          errorType: BookingErrorType.INVALID_LOCK // ✓ ALIGNED (was LOCK_INVALID)
+          errorType: BookingErrorType.LOCK_INVALID // CORRECTED: Using branch6 enum
         })
         return
       }
@@ -203,6 +209,7 @@ export const useBookingStore = create<BookingStore>((set, get) => {
         return
       }
 
+      // CLIENT-SIDE FORM VALIDATION (UX ONLY)
       if (!formData.firstName.trim() || !formData.lastName.trim() || !formData.email.trim()) {
         set({ 
           error: 'Please fill in all required fields.',
@@ -239,12 +246,12 @@ export const useBookingStore = create<BookingStore>((set, get) => {
           errorMessage = error.message
           errorType = error.type
           
-          // FIXED: Check for aligned enum values
+          // CORRECTED: Using branch6 enum values
           if (
             errorType === BookingErrorType.LOCK_EXPIRED ||
             errorType === BookingErrorType.SLOT_FULL ||
-            errorType === BookingErrorType.INVALID_LOCK || // ✓ ALIGNED (was LOCK_INVALID)
-            errorType === BookingErrorType.CAPACITY_EXCEEDED // ✓ ALIGNED (was CAPACITY_CHANGED)
+            errorType === BookingErrorType.LOCK_INVALID ||
+            errorType === BookingErrorType.CAPACITY_CHANGED
           ) {
             shouldReset = true
           }
