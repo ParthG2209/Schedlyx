@@ -35,7 +35,7 @@ function App() {
         {/* FIXED: Feature-flagged booking route - only ONE route registered */}
         {featureFlags.ENABLE_NEW_BOOKING_FLOW ? (
           <Route 
-            path="/book/:eventId" 
+            
             element={
               <BookingErrorBoundary>
                 <UpdatedBookingFlowPage />
@@ -44,7 +44,7 @@ function App() {
           />
         ) : (
           <Route 
-            path="/book/:eventId" 
+            
             element={<BookingPage />} 
           />
         )}
