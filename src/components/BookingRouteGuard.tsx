@@ -47,7 +47,7 @@ import { useBookingStore } from '../stores/bookingStore'
  * ```
  */
 export function BookingRouteGuard() {
-  const location = useLocation()
+
   const { lockId, currentStep, verifyLockValidity } = useBookingStore()
 
   useEffect(() => {
