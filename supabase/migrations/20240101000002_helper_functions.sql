@@ -274,6 +274,15 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Check if user is available at a specific time
+-- NOTE ON BEHAVIOR:
+-- This function enforces user-defined weekly availability (from public.availabilities).
+-- 1. If a user HAS NOT defined any weekly availability, they are assumed to be 
+--    available (subject to existing bookings and overrides).
+-- 2. Once a user defines AT LEAST ONE availability slot, this function becomes 
+--    RESTRICTIVE. The user is then considered UNAVAILABLE for all times NOT 
+--    explicitly covered by an enabled availability slot.
+-- 3. This means adding a single slot (e.g., Monday 9-5) will effectively block 
+--    the rest of the week for that user.
 CREATE OR REPLACE FUNCTION public.is_user_available(
   p_user_id UUID,
   p_date DATE,
@@ -311,6 +320,21 @@ BEGIN
       )
   ) THEN
     RETURN FALSE;
+  END IF;
+  
+  -- Check for weekly availability
+  -- If any weekly availability is set for this user, they must fit within one of the slots
+  IF EXISTS (SELECT 1 FROM public.availabilities WHERE user_id = p_user_id) THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM public.availabilities
+      WHERE user_id = p_user_id
+        AND day_of_week = EXTRACT(DOW FROM p_date)
+        AND is_enabled = true
+        AND start_time <= p_start_time
+        AND end_time >= p_end_time
+    ) THEN
+      RETURN FALSE;
+    END IF;
   END IF;
   
   RETURN TRUE;

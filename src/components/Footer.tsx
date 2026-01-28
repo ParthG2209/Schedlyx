@@ -1,5 +1,4 @@
 import { Link } from 'react-router-dom'
-import { CalendarIcon } from '@heroicons/react/24/outline'
 
 const tape = (
   <svg xmlns="http://www.w3.org/2000/svg" width="95" height="80" viewBox="0 0 95 80" fill="none">
@@ -29,8 +28,12 @@ export function Footer() {
               to="/"
               className="flex flex-row gap-2 items-center justify-start text-2xl font-bold text-gray-900"
             >
-              <CalendarIcon className="h-8 w-8 text-primary-600" />
-              Schedlyx
+              <img 
+                src="/images/Schedlyx Logo Design.svg" 
+                alt="Schedlyx Logo" 
+                className="h-10 w-auto" 
+              />
+              <span className="hidden sm:inline">Schedlyx</span>
             </Link>
             <p className='text-gray-600 font-medium text-base w-full md:w-4/5'>
               Open-source scheduling and event coordination platform for seamless time management.

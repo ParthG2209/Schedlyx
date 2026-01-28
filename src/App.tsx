@@ -1,11 +1,17 @@
 // src/App.tsx
 // FIXED: Added missing path="/book/:eventId" prop to feature-flagged routes
+
+// CHANGES FOR PR #41 - BOOKING ENGINE FEATURE FLAG
+
+
 import { Routes, Route } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ProtectedRoute } from './components/ProtectedRoute'
 import { EmailVerificationGuard } from './components/EmailVerificationGuard'
 import { BookingErrorBoundary } from './components/booking/BookingErrorBoundary'
 import { featureFlags } from './lib/featureFlags'
+import { BookingRouteGuard } from './components/BookingRouteGuard'
+import { featureFlags } from './lib/featureFlags' 
 import { Home } from './pages/Home'
 import { Login } from './pages/Login'
 import { Signup } from './pages/Signup'
@@ -18,10 +24,16 @@ import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
 import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
 import { BookingPage } from './pages/BookingPage'
+import { AvailabilityPage } from './pages/Availability'
 
 function App() {
   return (
     <Layout>
+      {/* Only render BookingRouteGuard when booking engine is enabled */}
+      
+      {/* AFTER: */}
+      {featureFlags.ENABLE_BOOKING_ENGINE && <BookingRouteGuard />}
+      
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
@@ -83,9 +95,23 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        <Route 
+          path="/availability" 
+          element={
+            <ProtectedRoute>
+              <AvailabilityPage />
+            </ProtectedRoute>
+          } 
+        />
       </Routes>
     </Layout>
   )
 }
 
 export default App
+
+
+// SUMMARY OF CHANGES:
+// 1. Added: import { featureFlags } from './lib/featureFlags'
+// 2. Wrapped BookingRouteGuard in: {featureFlags.ENABLE_BOOKING_ENGINE && ...}
+// 3. Wrapped booking route in: {featureFlags.ENABLE_BOOKING_ENGINE && (...)}

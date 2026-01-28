@@ -30,6 +30,11 @@ export interface Database {
         Insert: WaitlistInsert
         Update: WaitlistUpdate
       }
+      availabilities: {
+        Row: Availability
+        Insert: AvailabilityInsert
+        Update: AvailabilityUpdate
+      }
       availability_overrides: {
         Row: AvailabilityOverride
         Insert: AvailabilityOverrideInsert
@@ -383,6 +388,32 @@ export interface WaitlistUpdate {
   notified_at?: string
   converted_to_booking?: boolean
   converted_at?: string
+}
+
+export interface Availability {
+  id: string
+  user_id: string
+  day_of_week: number
+  start_time: string
+  end_time: string
+  is_enabled: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface AvailabilityInsert {
+  user_id: string
+  day_of_week: number
+  start_time: string
+  end_time: string
+  is_enabled?: boolean
+}
+
+export interface AvailabilityUpdate {
+  day_of_week?: number
+  start_time?: string
+  end_time?: string
+  is_enabled?: boolean
 }
 
 export interface AvailabilityOverride {

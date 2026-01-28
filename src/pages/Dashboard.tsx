@@ -3,7 +3,8 @@ import {
   PlusIcon, 
   CalendarDaysIcon, 
   UserGroupIcon, 
-  ChartBarIcon 
+  ChartBarIcon,
+  ClockIcon 
 } from '@heroicons/react/24/outline'
 import { EventCard } from '../components/EventCard'
 import { Event } from '../types'
@@ -149,6 +150,16 @@ export function Dashboard() {
               <div className="ml-4">
                 <h3 className="text-lg font-medium text-gray-900">Manage Events</h3>
                 <p className="text-gray-600">Edit and organize your events</p>
+              </div>
+            </div>
+          </Link>
+
+          <Link to="/availability" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
+            <div className="flex items-center">
+              <ClockIcon className="h-8 w-8 text-primary-600" />
+              <div className="ml-4">
+                <h3 className="text-lg font-medium text-gray-900">Availability</h3>
+                <p className="text-gray-600">Set your weekly recurring schedule</p>
               </div>
             </div>
           </Link>
