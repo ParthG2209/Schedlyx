@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useCallback } from 'react'
 import { ClockIcon, MapPinIcon } from '@heroicons/react/24/outline'
 
 export function CreateEvent() {
@@ -21,11 +21,24 @@ export function CreateEvent() {
     }
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    // TODO: Implement event creation with Supabase
-    console.log('Creating event:', formData)
-  }
+  // Prevent duplicate submissions
+  const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const handleSubmit = useCallback(async () => {
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
+
+    try {
+      // TODO: Implement event creation with Supabase
+      console.log('Creating event:', formData)
+      // Add actual API call here
+    } catch (error) {
+      console.error('Error creating event:', error)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [formData, isSubmitting])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target
@@ -324,11 +337,15 @@ export function CreateEvent() {
 
         {/* Submit */}
         <div className="flex justify-end space-x-4">
-          <button type="button" className="btn-secondary">
+          <button type="button" className="btn-secondary" disabled={isSubmitting}>
             Save as Draft
           </button>
-          <button type="submit" className="btn-primary">
-            Create Event
+          <button
+            type="submit"
+            className="btn-primary"
+            disabled={isSubmitting}
+          >
+            {isSubmitting ? 'Creating...' : 'Create Event'}
           </button>
         </div>
       </form>
