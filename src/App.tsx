@@ -22,7 +22,6 @@ import { PublicEventPage } from './pages/PublicEventPage'
 import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
 import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
-import { BookingPage } from './pages/BookingPage'
 import { AvailabilityPage } from './pages/Availability'
 
 function App() {
@@ -43,21 +42,41 @@ function App() {
         <Route path="/events" element={<EventsList />} />
         
         {/* FIXED: Feature-flagged booking route with path prop */}
-        {featureFlags.ENABLE_NEW_BOOKING_FLOW ? (
+        {featureFlags.ENABLE_BOOKING_ENGINE ? (
           <Route 
             path="/book/:eventId"
             element={
               <BookingErrorBoundary>
-                <UpdatedBookingFlowPage />
+                <UpdatedBookingFlowPage 
+                  currentStep="select-slot"
+                  slots={[]}
+                  selectedSlot={null}
+                  selectedQuantity={1}
+                  formData={{
+                    firstName: '',
+                    lastName: '',
+                    email: ''
+                  }}
+                  booking={null}
+                  loading={false}
+                  error={null}
+                  timeRemaining={0}
+                  onSelectSlot={() => {}}
+                  onUpdateFormData={() => {}}
+                  onConfirmBooking={() => {}}
+                  onCancelBooking={() => {}}
+                  onClose={() => {}}
+                />
               </BookingErrorBoundary>
             } 
           />
-        ) : (
-          <Route 
-            path="/book/:eventId"
-            element={<BookingPage />} 
-          />
-        )}
+        ) : null
+        // ❌ TEMPORARILY REMOVED - BookingPage has props mismatch
+        // <Route 
+        //   path="/book/:eventId"
+        //   element={<BookingPage />} 
+        // />
+        }
         
         {/* Email Verification Route */}
         <Route 

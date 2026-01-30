@@ -118,7 +118,7 @@ export function EmailVerification() {
                   Error
                 </h3>
                 <div className="mt-2 text-sm text-red-700">
-                  <p>{error}</p>
+                  <p>{error?.message ?? 'Something went wrong'}</p>
                 </div>
               </div>
             </div>
