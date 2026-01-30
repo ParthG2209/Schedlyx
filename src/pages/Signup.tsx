@@ -1,3 +1,6 @@
+// src/pages/Signup.tsx
+// FIXED: Removed localStorage auth markers, proper state-based flow
+
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
@@ -20,19 +23,16 @@ export function Signup() {
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const validateForm = () => {
-    // Password validation
     if (formData.password.length < 6) {
       setValidationError('Password must be at least 6 characters long')
       return false
     }
 
-    // Password match validation
     if (formData.password !== formData.confirmPassword) {
       setValidationError('Passwords do not match')
       return false
     }
 
-    // Terms validation
     if (!agreeToTerms) {
       setValidationError('You must agree to the Terms of Service and Privacy Policy')
       return false
@@ -54,19 +54,23 @@ export function Signup() {
       await signUp(formData.email, formData.password, {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        first_name: formData.firstName,
+        first_name: formData.firstName, // For compatibility
         last_name: formData.lastName
       })
       
-      // Always redirect to verification page after signup
-      // (Email confirmation is required, so user won't be auto-logged in)
+      // FIXED: No localStorage markers
+      // Auth store handles emailVerificationRequired state
+      // Redirect with explicit state
       navigate('/verify-email', { 
-        state: { email: formData.email },
-        replace: true // Prevent going back to signup form
+        state: { 
+          email: formData.email,
+          fromSignup: true // Explicit marker
+        },
+        replace: true
       })
     } catch (error: any) {
-      console.error('Signup error:', error)
-      // Error is handled by the store and will be displayed
+      console.error('[Signup] Error:', error)
+      // Error already set by auth store
     }
   }
 
@@ -75,7 +79,6 @@ export function Signup() {
       ...prev,
       [e.target.name]: e.target.value
     }))
-    // Clear validation error when user types
     if (validationError) {
       setValidationError(null)
     }
@@ -84,20 +87,26 @@ export function Signup() {
   const handleGoogleSignIn = async () => {
     clearError()
     try {
+      // FIXED: No localStorage markers
       await signInWithGoogle()
-      // OAuth redirect will handle the rest
+      // OAuth redirect handled by Supabase
     } catch (error: any) {
-      console.error('Google sign in error:', error)
+      console.error('[Signup] Google sign in error:', error)
     }
   }
 
-  const displayError = validationError || error
+  const displayError = validationError || error?.userMessage
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-md w-full space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-bold text-gray-900">
+        <div className="flex flex-col items-center">
+          <img 
+            src="/images/Schedlyx Logo Design.svg" 
+            alt="Schedlyx Logo" 
+            className="h-16 w-auto mb-4" 
+          />
+          <h2 className="text-center text-3xl font-bold text-gray-900">
             Create your account
           </h2>
           <p className="mt-2 text-center text-sm text-gray-600">
@@ -110,7 +119,7 @@ export function Signup() {
         
         {/* Error Message */}
         {displayError && (
-          <div className="rounded-md bg-red-50 p-4">
+          <div className="rounded-md bg-red-50 border border-red-200 p-4">
             <div className="flex">
               <div className="ml-3">
                 <h3 className="text-sm font-medium text-red-800">

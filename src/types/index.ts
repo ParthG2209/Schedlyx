@@ -1,3 +1,8 @@
+import { 
+  Availability as DBAvailability,
+  AvailabilityInsert as DBAvailabilityInsert
+} from './database'
+
 export interface User {
   id: string
   email: string
@@ -7,6 +12,46 @@ export interface User {
   createdAt: string
   updatedAt: string
 }
+
+/**
+ * Canonical Availability type for the domain.
+ * Maps to database structure but uses camelCase for JS/TS conventions.
+ */
+export interface Availability {
+  id: string
+  userId: string
+  dayOfWeek: number
+  startTime: string
+  endTime: string
+  isEnabled: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+/**
+ * Mapper to convert Database Availability to Domain Availability
+ */
+export const mapDBAvailabilityToDomain = (db: DBAvailability): Availability => ({
+  id: db.id,
+  userId: db.user_id,
+  dayOfWeek: db.day_of_week,
+  startTime: db.start_time,
+  endTime: db.end_time,
+  isEnabled: db.is_enabled,
+  createdAt: db.created_at,
+  updatedAt: db.updated_at
+})
+
+/**
+ * Mapper to convert Domain Availability to Database Insert
+ */
+export const mapDomainAvailabilityToDBInsert = (domain: Partial<Availability>, userId: string): DBAvailabilityInsert => ({
+  user_id: userId,
+  day_of_week: domain.dayOfWeek ?? 0,
+  start_time: domain.startTime ?? '09:00',
+  end_time: domain.endTime ?? '17:00',
+  is_enabled: domain.isEnabled ?? true
+})
 
 export interface Event {
   id: string

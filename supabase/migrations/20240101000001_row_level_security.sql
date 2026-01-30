@@ -1,6 +1,6 @@
 -- supabase/migrations/20240101000001_row_level_security.sql
 -- Row Level Security (RLS) Policies for Schedlyx
--- FIXED: Added guest user policies for bookings (email-based access)
+-- FIXED: Proper guest user access without relying on JWT claims
 
 -- =====================================================
 -- ENABLE RLS ON ALL TABLES
@@ -137,7 +137,7 @@ CREATE POLICY "Users can delete own event sessions"
 
 -- =====================================================
 -- BOOKINGS POLICIES
--- FIXED: Added guest user policies for email-based access
+-- FIXED: Guest access via booking_reference instead of JWT
 -- =====================================================
 
 -- Event owners can view all bookings for their events
@@ -156,15 +156,6 @@ CREATE POLICY "Users can view own bookings"
   ON public.bookings FOR SELECT
   USING (auth.uid() = user_id);
 
--- FIXED: Guests can view their own bookings using email
--- This allows non-authenticated users to view bookings they created
-CREATE POLICY "Guests can view own booking by email"
-  ON public.bookings FOR SELECT
-  USING (
-    user_id IS NULL 
-    AND email = current_setting('request.jwt.claim.email', true)
-  );
-
 -- Anyone can create bookings for public events (authenticated or guest)
 CREATE POLICY "Anyone can create bookings for public events"
   ON public.bookings FOR INSERT
@@ -181,16 +172,6 @@ CREATE POLICY "Anyone can create bookings for public events"
 CREATE POLICY "Users can update own bookings"
   ON public.bookings FOR UPDATE
   USING (auth.uid() = user_id);
-
--- FIXED: Guests can cancel their own bookings using email
--- This allows non-authenticated users to cancel bookings they created
-CREATE POLICY "Guests can cancel own booking"
-  ON public.bookings FOR UPDATE
-  USING (
-    user_id IS NULL 
-    AND email = current_setting('request.jwt.claim.email', true)
-  )
-  WITH CHECK (status = 'cancelled');
 
 -- Event owners can update bookings for their events
 CREATE POLICY "Event owners can update bookings"
@@ -410,6 +391,62 @@ END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- =====================================================
+-- GUEST BOOKING ACCESS FUNCTIONS
+-- FIXED: Access via booking_reference instead of JWT
+-- =====================================================
+
+-- Get booking by reference (for guest access)
+CREATE OR REPLACE FUNCTION public.get_booking_by_reference(p_reference TEXT, p_email TEXT)
+RETURNS TABLE (
+  id UUID,
+  event_id UUID,
+  first_name TEXT,
+  last_name TEXT,
+  email TEXT,
+  date DATE,
+  time TIME,
+  status TEXT,
+  booking_reference TEXT,
+  created_at TIMESTAMPTZ
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    b.id, b.event_id, b.first_name, b.last_name, b.email,
+    b.date, b.time, b.status, b.booking_reference, b.created_at
+  FROM public.bookings b
+  WHERE b.booking_reference = p_reference
+    AND b.email = p_email;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Cancel booking by reference (for guest access)
+CREATE OR REPLACE FUNCTION public.cancel_booking_by_reference(
+  p_reference TEXT,
+  p_email TEXT,
+  p_cancellation_reason TEXT DEFAULT NULL
+)
+RETURNS BOOLEAN AS $$
+DECLARE
+  v_booking_id UUID;
+BEGIN
+  -- Find booking
+  SELECT id INTO v_booking_id
+  FROM public.bookings
+  WHERE booking_reference = p_reference
+    AND email = p_email
+    AND status IN ('pending', 'confirmed');
+  
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Booking not found or cannot be cancelled';
+  END IF;
+  
+  -- Use existing cancel_booking function
+  RETURN public.cancel_booking(v_booking_id, p_cancellation_reason);
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- =====================================================
 -- GRANT PERMISSIONS
 -- =====================================================
 
@@ -438,3 +475,5 @@ GRANT SELECT ON public.audit_log TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_event_owner(UUID) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.is_event_public(UUID) TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.can_book_event(UUID) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.get_booking_by_reference(TEXT, TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.cancel_booking_by_reference(TEXT, TEXT, TEXT) TO anon, authenticated;
