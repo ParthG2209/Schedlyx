@@ -11,7 +11,6 @@
 // Does NOT automatically release locks on route changes
 
 import { useEffect } from 'react'
-import { useLocation } from 'react-router-dom'
 import { useBookingStore } from '../stores/bookingStore'
 
 /**

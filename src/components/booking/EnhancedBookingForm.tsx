@@ -2,7 +2,7 @@
 // UI-ONLY VERSION - No validation logic, no timer logic
 // All logic delegated to booking service from PR #41
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { 
   ExclamationCircleIcon,
   CheckCircleIcon,
