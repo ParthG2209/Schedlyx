@@ -23,15 +23,16 @@ import { AdminEventManager } from './pages/AdminEventManager'
 import { EventsList } from './pages/EventsList'
 import { UpdatedBookingFlowPage } from './pages/UpdatedBookingFlow'
 import { AvailabilityPage } from './pages/Availability'
+import { BookingConfirmed } from './pages/BookingConfirmed'
 
 function App() {
   return (
     <Layout>
       {/* Only render BookingRouteGuard when booking engine is enabled */}
-      
+
       {/* AFTER: */}
       {featureFlags.ENABLE_BOOKING_ENGINE && <BookingRouteGuard />}
-      
+
       <Routes>
         {/* Public Routes */}
         <Route path="/" element={<Home />} />
@@ -40,7 +41,8 @@ function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/event/:eventId" element={<PublicEventPage />} />
         <Route path="/events" element={<EventsList />} />
-        
+        <Route path="/booking/confirmed" element={<BookingConfirmed />} />
+
         {/* FIXED: Feature-flagged booking route with path prop */}
         {featureFlags.ENABLE_BOOKING_ENGINE ? (
           <Route 
@@ -68,7 +70,7 @@ function App() {
                   onClose={() => {}}
                 />
               </BookingErrorBoundary>
-            } 
+            }
           />
         ) : null
         // ❌ TEMPORARILY REMOVED - BookingPage has props mismatch
@@ -79,47 +81,47 @@ function App() {
         }
         
         {/* Email Verification Route */}
-        <Route 
-          path="/verify-email" 
+        <Route
+          path="/verify-email"
           element={
             <EmailVerificationGuard>
               <EmailVerification />
             </EmailVerificationGuard>
-          } 
+          }
         />
-        
+
         {/* Protected Routes */}
-        <Route 
-          path="/dashboard" 
+        <Route
+          path="/dashboard"
           element={
             <ProtectedRoute>
               <Dashboard />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="/create-event" 
+        <Route
+          path="/create-event"
           element={
             <ProtectedRoute>
               <CreateEvent />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="/admin/events" 
+        <Route
+          path="/admin/events"
           element={
             <ProtectedRoute>
               <AdminEventManager />
             </ProtectedRoute>
-          } 
+          }
         />
-        <Route 
-          path="/availability" 
+        <Route
+          path="/availability"
           element={
             <ProtectedRoute>
               <AvailabilityPage />
             </ProtectedRoute>
-          } 
+          }
         />
       </Routes>
     </Layout>
