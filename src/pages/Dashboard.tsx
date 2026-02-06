@@ -1,180 +1,225 @@
-import { Link } from 'react-router-dom'
-import { 
-  PlusIcon, 
-  CalendarDaysIcon, 
-  UserGroupIcon, 
-  ChartBarIcon,
-  ClockIcon 
-} from '@heroicons/react/24/outline'
-import { EventCard } from '../components/EventCard'
-import { Event } from '../types'
+import React, { useEffect, useState } from 'react';
+import { useAuthStore } from '../store/authStore';
+import { supabase } from '../lib/supabase';
+import { Calendar, Users, Clock, ArrowRight, AlertCircle } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import type { Event } from '../types';
 
 export function Dashboard() {
-  // Mock data - replace with real data from Supabase
-  const stats = [
-    { name: 'Total Events', value: '12', icon: CalendarDaysIcon, change: '+2 this week' },
-    { name: 'Total Bookings', value: '89', icon: UserGroupIcon, change: '+12 this week' },
-    { name: 'This Month', value: '34', icon: ChartBarIcon, change: '+8 from last month' },
-  ]
+  const { user } = useAuthStore();
+  const [stats, setStats] = useState({
+    totalEvents: 0,
+    totalBookings: 0,
+    thisMonthEvents: 0,
+  });
+  const [recentEvents, setRecentEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const recentEvents: Event[] = [
-    {
-      id: '1',
-      userId: 'user1',
-      title: 'Team Standup',
-      description: 'Daily team synchronization and progress updates.',
-      type: 'meeting',
-      duration: 30,
-      location: 'Meeting Room B',
-      isOnline: false,
-      maxAttendees: 10,
-      requiresApproval: false,
-      allowCancellation: false,
-      cancellationDeadline: 0,
-      bufferTime: 5,
-      status: 'active',
-      availableDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'],
-      timeSlots: { start: '09:00', end: '17:00' },
-      createdAt: '2024-01-10',
-      updatedAt: '2024-01-10'
-    },
-    {
-      id: '2',
-      userId: 'user1',
-      title: 'Product Demo',
-      description: 'Showcase our latest product features and improvements.',
-      type: 'webinar',
-      duration: 60,
-      location: 'https://zoom.us/j/123456789',
-      isOnline: true,
-      maxAttendees: 50,
-      requiresApproval: false,
-      allowCancellation: true,
-      cancellationDeadline: 2,
-      bufferTime: 0,
-      status: 'active',
-      availableDays: ['Tuesday', 'Thursday'],
-      timeSlots: { start: '14:00', end: '16:00' },
-      createdAt: '2024-01-12',
-      updatedAt: '2024-01-12'
-    },
-    {
-      id: '3',
-      userId: 'user1',
-      title: 'Workshop: React Basics',
-      description: 'Learn React fundamentals including components, hooks, and state management.',
-      type: 'workshop',
-      duration: 120,
-      location: 'Tech Hub Conference Room',
-      isOnline: false,
-      maxAttendees: 25,
-      requiresApproval: true,
-      allowCancellation: true,
-      cancellationDeadline: 24,
-      bufferTime: 15,
-      status: 'draft',
-      availableDays: ['Wednesday', 'Friday'],
-      timeSlots: { start: '10:00', end: '17:00' },
-      createdAt: '2024-01-14',
-      updatedAt: '2024-01-14'
-    },
-  ]
+  useEffect(() => {
+    async function fetchDashboardData() {
+      try {
+        if (!user) return;
+        setLoading(true);
+        setError(null);
+
+        // 1. Fetch Events created by user
+        const { data: eventsData, error: eventsError } = await supabase
+          .from('events')
+          .select('*')
+          .eq('organizer_id', user.id)
+          .order('date', { ascending: true });
+
+        if (eventsError) throw eventsError;
+
+        // 2. Fetch Bookings for these events to calculate stats
+        const { data: bookingsData, error: bookingsError } = await supabase
+          .from('bookings')
+          .select('id, event_id, status')
+          .in('event_id', eventsData.map(e => e.id));
+
+        if (bookingsError) throw bookingsError;
+
+        // FIX #1: Safe Data Mapping (No more 'as unknown as')
+        // We explicitly map the DB response to match your Event interface
+        const mappedEvents: Event[] = (eventsData || []).map(event => ({
+          id: event.id,
+          title: event.title,
+          description: event.description || '',
+          date: event.date,
+          time: event.time,
+          location: event.location,
+          capacity: event.capacity,
+          price: event.price,
+          organizer_id: event.organizer_id,
+          image_url: event.image_url,
+          category: event.category
+        }));
+
+        setRecentEvents(mappedEvents.slice(0, 3)); // Show top 3
+
+        // Calculate Stats
+        const now = new Date();
+        const thisMonth = eventsData.filter(e => {
+          const d = new Date(e.date);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+        }).length;
+
+        setStats({
+          totalEvents: eventsData.length,
+          totalBookings: bookingsData?.length || 0,
+          thisMonthEvents: thisMonth,
+        });
+
+      } catch (err: any) {
+        console.error('Error loading dashboard:', err);
+        // FIX #2: Set Error State for UI
+        setError(err.message || 'Failed to load dashboard data');
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchDashboardData();
+  }, [user]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  // FIX #2: Error Fallback UI
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <AlertCircle className="h-5 w-5 text-red-400" aria-hidden="true" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">
+                Error loading dashboard: {error}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      {/* Header */}
       <div className="mb-8">
-        <div className="flex justify-between items-center">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-            <p className="text-gray-600 mt-1">Welcome back! Here's what's happening with your events.</p>
-          </div>
-          <Link to="/create-event" className="btn-primary flex items-center space-x-2">
-            <PlusIcon className="h-5 w-5" />
-            <span>Create Event</span>
-          </Link>
-        </div>
+        {/* FIX #3: Safe Name Greeting */}
+        <h1 className="text-3xl font-bold text-gray-900">
+          Welcome back{user?.first_name ? `, ${user.first_name}` : ''}!
+        </h1>
+        <p className="mt-2 text-gray-600">Here's what's happening with your events.</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        {stats.map((stat) => (
-          <div key={stat.name} className="bg-white rounded-lg shadow p-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8">
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <stat.icon className="h-8 w-8 text-primary-600" />
+                <Calendar className="h-6 w-6 text-gray-400" />
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">{stat.name}</p>
-                <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
-                <p className="text-sm text-green-600">{stat.change}</p>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Events</dt>
+                  <dd className="text-lg font-medium text-gray-900">{stats.totalEvents}</dd>
+                </dl>
               </div>
             </div>
           </div>
-        ))}
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <Users className="h-6 w-6 text-gray-400" />
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Total Bookings</dt>
+                  <dd className="text-lg font-medium text-gray-900">{stats.totalBookings}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white overflow-hidden shadow rounded-lg">
+          <div className="p-5">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <Clock className="h-6 w-6 text-gray-400" />
+              </div>
+              <div className="ml-5 w-0 flex-1">
+                <dl>
+                  <dt className="text-sm font-medium text-gray-500 truncate">Events This Month</dt>
+                  <dd className="text-lg font-medium text-gray-900">{stats.thisMonthEvents}</dd>
+                </dl>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Recent Events with EventCard */}
-      <div className="mb-8">
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">Recent Events</h2>
-          <Link to="/events" className="text-primary-600 hover:text-primary-700 text-sm font-medium">
-            View all events →
+      {/* Recent Events Section */}
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-4 py-5 sm:px-6 flex items-center justify-between">
+          <h2 className="text-lg leading-6 font-medium text-gray-900">Recent Events</h2>
+          <Link to="/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 flex items-center">
+            View all <ArrowRight className="ml-1 h-4 w-4" />
           </Link>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {recentEvents.map((event) => (
-            <EventCard key={event.id} event={event} />
-          ))}
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="mt-8">
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <Link to="/create-event" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <PlusIcon className="h-8 w-8 text-primary-600" />
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Create Event</h3>
-                <p className="text-gray-600">Set up a new event or booking page</p>
-              </div>
+        <div className="border-t border-gray-200">
+          {recentEvents.length > 0 ? (
+            <ul className="divide-y divide-gray-200">
+              {recentEvents.map((event) => (
+                <li key={event.id} className="px-4 py-4 sm:px-6 hover:bg-gray-50">
+                  <Link to={`/events/${event.id}`} className="block">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center">
+                        <div className="flex-shrink-0">
+                          <img
+                            className="h-10 w-10 rounded-full object-cover"
+                            src={event.image_url || 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30'}
+                            alt=""
+                          />
+                        </div>
+                        <div className="ml-4">
+                          <div className="text-sm font-medium text-indigo-600 truncate">{event.title}</div>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <Calendar className="flex-shrink-0 mr-1.5 h-4 w-4 text-gray-400" />
+                            {new Date(event.date).toLocaleDateString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="ml-5 flex-shrink-0">
+                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          Active
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="p-6 text-center text-gray-500">
+              No events created yet.
             </div>
-          </Link>
-          
-          <Link to="/admin/events" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <CalendarDaysIcon className="h-8 w-8 text-primary-600" />
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Manage Events</h3>
-                <p className="text-gray-600">Edit and organize your events</p>
-              </div>
-            </div>
-          </Link>
-
-          <Link to="/availability" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <ClockIcon className="h-8 w-8 text-primary-600" />
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Availability</h3>
-                <p className="text-gray-600">Set your weekly recurring schedule</p>
-              </div>
-            </div>
-          </Link>
-          
-          <Link to="/analytics" className="bg-white rounded-lg shadow p-6 hover:shadow-md transition-shadow">
-            <div className="flex items-center">
-              <ChartBarIcon className="h-8 w-8 text-primary-600" />
-              <div className="ml-4">
-                <h3 className="text-lg font-medium text-gray-900">Analytics</h3>
-                <p className="text-gray-600">View detailed insights and reports</p>
-              </div>
-            </div>
-          </Link>
+          )}
         </div>
       </div>
     </div>
-  )
+  );
 }
