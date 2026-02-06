@@ -2,7 +2,7 @@
 // FIXED: Removed permissive URL-based access, proper Supabase session validation
 
 import { ReactNode, useEffect, useState } from 'react'
-import { Navigate, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '../hooks/useAuth'
 import { supabase } from '../lib/supabase'
 
@@ -48,7 +48,7 @@ export function EmailVerificationGuard({ children }: EmailVerificationGuardProps
     // TERTIARY: Check for Supabase verification session
     // This handles email link clicks where user is being confirmed
     try {
-      const { data: { session }, error } = await supabase.auth.getSession()
+      const { data: { session } } = await supabase.auth.getSession()
       
       // Check URL for confirmation tokens (but validate with Supabase)
       const params = new URLSearchParams(location.search)

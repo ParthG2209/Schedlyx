@@ -17,7 +17,7 @@ import { supabase } from '../lib/supabase'
  */
 export function AuthCallback() {
   const navigate = useNavigate()
-  const { user, loading } = useAuthStore()
+  useAuthStore() // TODO: replace with actual auth usage
   const [validationState, setValidationState] = useState<'checking' | 'valid' | 'error'>('checking')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 

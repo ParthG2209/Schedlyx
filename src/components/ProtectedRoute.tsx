@@ -49,9 +49,6 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   if (!isValidAuthState) {
     console.error('[ProtectedRoute] Invalid auth state: authenticated but no user')
     
-    // Clear potentially corrupt auth state
-    useAuthStore.getState().signOut().catch(console.error)
-    
     return <Navigate to="/login" state={{ from: location, error: 'invalid_session' }} replace />
   }
 
@@ -64,19 +61,3 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   return <>{children}</>
 }
 
-/**
- * Helper: Check if current auth state is valid
- * 
- * Valid states:
- * - Not authenticated, no user ✓
- * - Authenticated, has user ✓
- * 
- * Invalid states:
- * - Authenticated, no user ✗
- * - Not authenticated, has user ✗
- */
-function isAuthStateValid(isAuthenticated: boolean, user: any): boolean {
-  if (isAuthenticated && !user) return false
-  if (!isAuthenticated && user) return false
-  return true
-}
